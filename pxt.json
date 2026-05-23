@@ -1,0 +1,20 @@
+{
+    "name": "pxt-neopixel",
+    "version": "0.1.0",
+    "description": "Forward Education Neopixel Module for Jacdac on micro:bit",
+    "dependencies": {
+        "core": "*",
+        "jacdac": "github:microsoft/pxt-jacdac"
+    },
+    "files": [
+        "main.ts",
+        "fwd-neopixel.ts"
+    ],
+    "testFiles": [
+        "test.ts"
+    ],
+    "supportedTargets": [
+        "microbit"
+    ],
+    "preferredEditor": "blocksprj"
+}
