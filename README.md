@@ -1,4 +1,4 @@
-# Forward Education Neopixel Module — MakeCode Extension
+# Neopixel Module — MakeCode Extension
 
 MakeCode extension for the Forward Education Jacdac Neopixel Module. Provides
 student-friendly blocks for controlling WS2812B neopixel strips connected via
@@ -99,7 +99,3 @@ methods (`setPixelColor`, `setAll`, `show`, `setBrightness`, `setNumPixels`,
 `setMaxPower`, `runEncoded`) should be verified against the current pxt-jacdac
 release when first testing in MakeCode, as the auto-generated client API may
 evolve.
-
-## License
-
-MIT
