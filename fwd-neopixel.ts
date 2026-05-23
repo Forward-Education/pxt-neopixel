@@ -9,7 +9,7 @@
 
 //% color="#FF6600" icon="\uf0eb" weight=90
 //% groups="['Pixels', 'Matrix', 'Animations', 'Configuration']"
-namespace fwdNeopixel {
+namespace neopixel {
     const strip = new modules.LedStripClient("fwd neopixel")
 
     // \u2500\u2500 Matrix state \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
