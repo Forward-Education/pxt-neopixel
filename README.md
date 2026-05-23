@@ -1,4 +1,4 @@
-# Neopixel Module — MakeCode Extension
+# Forward Education Neopixel Module — MakeCode Extension
 
 MakeCode extension for the Forward Education Jacdac Neopixel Module. Provides
 student-friendly blocks for controlling WS2812B neopixel strips connected via
@@ -11,7 +11,7 @@ the module's screw terminal.
 In MakeCode for micro:bit (V2):
 1. Open **Extensions** in the toolbox
 2. Paste `https://github.com/Forward-Education/pxt-neopixel`
-3. The **Fwd Neopixel** category appears in the toolbox
+3. The **neopixel** category appears in the toolbox
 
 ### Connect the hardware
 
@@ -24,29 +24,54 @@ In MakeCode for micro:bit (V2):
 ### Blocks
 
 **Pixels**
-- `set pixel [n] to [color]` — set one pixel
-- `set all pixels to [color]` — fill the strip
-- `show pixels` — push changes to the strip
+- `set pixel [n] to [color]` — set one pixel by index
+- `set all pixels to [color]` — fill the entire strip
+- `show pixels` — push the current buffer to the strip
 - `clear all pixels` — turn off all pixels
 
+**Matrix**
+- `set up matrix [rows] rows [columns] columns` — configure the strip as a 2-D grid; also sets the pixel count automatically. An optional *serpentine* toggle handles zigzag wiring (default: on)
+- `set matrix pixel row [r] column [c] to [color]` — set one pixel by row and column
+- `set row [r] to [color]` — fill an entire row
+- `set column [c] to [color]` — fill an entire column
+- `fill area row [r] column [c] width [w] height [h] with [color]` — fill a rectangular region
+- `scroll [text] in [color] on matrix` — scroll a text string across the matrix (A–Z, 0–9, space); optional *delay* slider controls speed
+- `scroll number [n] in [color] on matrix` — scroll a number across the matrix
+- `scroll rainbow on matrix [n] times` — animate a hue-cycling rainbow across the columns
+
 **Animations**
-- `show rainbow` — rainbow cycle
-- `show sparkle` — sparkle effect
-- `rotate pixels` — shift pattern by one
+- `show rainbow` — rainbow cycle (firmware animation)
+- `show sparkle` — sparkle effect (firmware animation)
+- `rotate pixels` — shift the pixel pattern forward by one step
+- `color wipe [color]` — fill the strip pixel-by-pixel; optional *delay* slider controls speed
 
 **Configuration**
 - `set brightness to [n] %` — global brightness (0–100)
 - `set pixel count to [n]` — number of pixels on the strip
 - `set max power to [n] mW` — power budget for auto-dimming
 
+> **Note:** `show pixels` must be called after matrix blocks to make changes
+> visible, just as with strip blocks.
+
 ### Example: bus-powered strip (10 pixels)
 
 ```blocks
-fwdNeopixel.setPixelCount(10)
-fwdNeopixel.setBrightness(30)
+neopixel.setPixelCount(10)
+neopixel.setBrightness(30)
 basic.forever(function () {
-    fwdNeopixel.showRainbow()
+    neopixel.showRainbow()
     basic.pause(1000)
+})
+```
+
+### Example: 5×10 matrix with scrolling text
+
+```blocks
+neopixel.setupMatrix(5, 10, true)
+neopixel.setBrightness(30)
+basic.forever(function () {
+    neopixel.showString("HELLO", 0xff0000)
+    neopixel.scrollMatrixRainbow(2)
 })
 ```
 
@@ -56,14 +81,28 @@ When you power the neopixel strip from an external 5V supply (instead of the
 Jacdac bus), raise the max power limit to match your supply:
 
 ```blocks
-fwdNeopixel.setPixelCount(60)
-fwdNeopixel.setMaxPower(10000)
-fwdNeopixel.setBrightness(80)
+neopixel.setPixelCount(60)
+neopixel.setMaxPower(10000)
+neopixel.setBrightness(80)
 basic.forever(function () {
-    fwdNeopixel.showRainbow()
+    neopixel.showRainbow()
     basic.pause(500)
 })
 ```
+
+## Matrix wiring
+
+A matrix maps a single continuous strip onto a 2-D grid. Two wiring styles are
+supported via the *serpentine* option in `setupMatrix`:
+
+| Style | Description |
+|---|---|
+| **Serpentine** (default) | Odd rows run right-to-left. Common for dense LED panels. |
+| **Grid** | Every row runs left-to-right. Less common but simpler to wire. |
+
+Pixel index formula:
+- Grid: `index = row × columns + column`
+- Serpentine: same, but odd rows count from the right
 
 ## Hardware
 
@@ -99,3 +138,7 @@ methods (`setPixelColor`, `setAll`, `show`, `setBrightness`, `setNumPixels`,
 `setMaxPower`, `runEncoded`) should be verified against the current pxt-jacdac
 release when first testing in MakeCode, as the auto-generated client API may
 evolve.
+
+## License
+
+MIT
