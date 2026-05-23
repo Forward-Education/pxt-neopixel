@@ -11,7 +11,7 @@ the module's screw terminal.
 In MakeCode for micro:bit (V2):
 1. Open **Extensions** in the toolbox
 2. Paste `https://github.com/Forward-Education/pxt-neopixel`
-3. The **Fwd Neopixel** category appears in the toolbox
+3. The **neopixel** category appears in the toolbox
 
 ### Connect the hardware
 
