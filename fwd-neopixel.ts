@@ -6,12 +6,46 @@
  *
  * Wraps the Jacdac LED Strip client (modules.LedStripClient) from pxt-jacdac.
  * Verified against pxt-jacdac master (led-strip/client.ts).
+ *
+ * Brightness is applied in software (RGB scaling), and solid fills use the
+ * `setall` light-program command — see the notes in setBrightness/setAllPixels.
  */
 
 //% color="#FF6600" icon="\uf0eb" weight=90
 //% groups="['Pixels', 'Animations', 'Configuration']"
 namespace fwdNeopixel {
     const strip = new modules.LedStripClient("fwd neopixel")
+
+    // ── Internal state ────────────────────────────────────────────
+    // Brightness is applied in software (we scale each pixel's RGB before
+    // sending) because the module firmware does not honor the Jacdac
+    // brightness register. We keep the firmware register pinned at full so
+    // it can never dim on top of our scaling.
+    let _brightness = 30                 // 0–100, percent
+    let _pixels: number[] = []           // logical (un-scaled) RGB per pixel
+    let _initialized = false
+
+    // Pin firmware brightness to max once, lazily on first use.
+    function ensureInit(): void {
+        if (_initialized) return
+        _initialized = true
+        strip.setBrightness(100)
+    }
+
+    // Scale an RGB color by the current software brightness.
+    function dim(color: number): number {
+        const r = Math.idiv(((color >> 16) & 0xff) * _brightness, 100)
+        const g = Math.idiv(((color >> 8) & 0xff) * _brightness, 100)
+        const b = Math.idiv((color & 0xff) * _brightness, 100)
+        return (r << 16) | (g << 8) | b
+    }
+
+    // Re-send every stored pixel at the current brightness.
+    function refresh(): void {
+        for (let i = 0; i < _pixels.length; i++) {
+            strip.setPixel(i, dim(_pixels[i]))
+        }
+    }
 
     // ── Pixel Control ─────────────────────────────────────────────
 
@@ -26,7 +60,10 @@ namespace fwdNeopixel {
     //% color.shadow="colorNumberPicker"
     //% weight=100
     export function setPixelColor(pixel: number, color: number): void {
-        strip.setPixel(pixel, color)
+        ensureInit()
+        while (_pixels.length <= pixel) _pixels.push(0)
+        _pixels[pixel] = color
+        strip.setPixel(pixel, dim(color))
     }
 
     /**
@@ -38,7 +75,12 @@ namespace fwdNeopixel {
     //% color.shadow="colorNumberPicker"
     //% weight=95
     export function setAllPixels(color: number): void {
-        strip.setAll(color)
+        ensureInit()
+        for (let i = 0; i < _pixels.length; i++) _pixels[i] = color
+        // Use the `setall` light-program command (a direct fill) rather than
+        // the client's setAll(), which emits `fade` — `fade` is for gradients
+        // and does not reliably fill a solid color (especially black).
+        strip.runEncoded("setall #", [dim(color)])
     }
 
     /**
@@ -48,7 +90,9 @@ namespace fwdNeopixel {
     //% group="Pixels"
     //% weight=85
     export function clear(): void {
-        strip.setAll(0x000000)
+        ensureInit()
+        for (let i = 0; i < _pixels.length; i++) _pixels[i] = 0
+        strip.runEncoded("setall #000000")
     }
 
     // ── Animations ────────────────────────────────────────────────
@@ -103,7 +147,10 @@ namespace fwdNeopixel {
     //% brightness.min=0 brightness.max=100 brightness.defl=30
     //% weight=60
     export function setBrightness(brightness: number): void {
-        strip.setBrightness(brightness)
+        ensureInit()
+        _brightness = Math.max(0, Math.min(100, brightness))
+        // Re-apply to already-lit pixels so the change is visible immediately.
+        refresh()
     }
 
     /**
@@ -115,7 +162,12 @@ namespace fwdNeopixel {
     //% count.min=1 count.max=300 count.defl=30
     //% weight=55
     export function setPixelCount(count: number): void {
+        ensureInit()
         strip.setNumPixels(count)
+        // Resize the logical buffer, preserving existing colors.
+        const next: number[] = []
+        for (let i = 0; i < count; i++) next.push(i < _pixels.length ? _pixels[i] : 0)
+        _pixels = next
     }
 
     /**
