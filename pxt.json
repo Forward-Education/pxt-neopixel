@@ -4,7 +4,7 @@
     "description": "Forward Education Neopixel Module for Jacdac on micro:bit",
     "dependencies": {
         "core": "*",
-        "jacdac": "github:microsoft/pxt-jacdac"
+        "jacdac-led-strip": "github:microsoft/pxt-jacdac/led-strip"
     },
     "files": [
         "main.ts",
