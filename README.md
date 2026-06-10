@@ -11,7 +11,7 @@ the module's screw terminal.
 In MakeCode for micro:bit (V2):
 1. Open **Extensions** in the toolbox
 2. Paste `https://github.com/Forward-Education/pxt-neopixel`
-3. The **neopixel** category appears in the toolbox
+3. The **Fwd Neopixel** category appears in the toolbox
 
 ### Connect the hardware
 
@@ -24,85 +24,68 @@ In MakeCode for micro:bit (V2):
 ### Blocks
 
 **Pixels**
-- `set pixel [n] to [color]` — set one pixel by index
-- `set all pixels to [color]` — fill the entire strip
-- `show pixels` — push the current buffer to the strip
+- `set pixel [n] to [color]` — set one pixel
+- `set all pixels to [color]` — fill the strip
+- `show pixels` — push changes to the strip
 - `clear all pixels` — turn off all pixels
 
-**Matrix**
-- `set up matrix [rows] rows [columns] columns` — configure the strip as a 2-D grid; also sets the pixel count automatically. An optional *serpentine* toggle handles zigzag wiring (default: on)
-- `set matrix pixel row [r] column [c] to [color]` — set one pixel by row and column
-- `set row [r] to [color]` — fill an entire row
-- `set column [c] to [color]` — fill an entire column
-- `fill area row [r] column [c] width [w] height [h] with [color]` — fill a rectangular region
-- `scroll [text] in [color] on matrix` — scroll a text string across the matrix (A–Z, 0–9, space); optional *delay* slider controls speed
-- `scroll number [n] in [color] on matrix` — scroll a number across the matrix
-- `scroll rainbow on matrix [n] times` — animate a hue-cycling rainbow across the columns
-
 **Animations**
-- `show rainbow` — rainbow cycle (firmware animation)
-- `show sparkle` — sparkle effect (firmware animation)
-- `rotate pixels` — shift the pixel pattern forward by one step
-- `color wipe [color]` — fill the strip pixel-by-pixel; optional *delay* slider controls speed
+- `show rainbow` — rainbow cycle
+- `show sparkle` — sparkle effect
+- `rotate pixels` — shift pattern by one
 
 **Configuration**
 - `set brightness to [n] %` — global brightness (0–100)
 - `set pixel count to [n]` — number of pixels on the strip
-- `set max power to [n] mW` — power budget for auto-dimming
+- `set max power to [n] mA` — current budget for auto-dimming (see Power below)
 
-> **Note:** `show pixels` must be called after matrix blocks to make changes
-> visible, just as with strip blocks.
+## Power — important!
 
-### Example: bus-powered strip (10 pixels)
+The Jacdac LED Strip service `max_power` register is in **milliamps (mA)**.
+The module auto-dims the strip whenever the calculated current draw would
+exceed this limit. Each WS2812B pixel draws up to ~60 mA at full white.
+
+### Bus-powered (default)
+
+When the strip's power comes from the Jacdac bus through the screw terminal,
+keep `max power` at **450 mA or below**. Setting it higher than the bus can
+actually supply will cause voltage sag and **reset the module** (status LED
+turns red, animations stop).
 
 ```blocks
-neopixel.setPixelCount(10)
-neopixel.setBrightness(30)
+fwdNeopixel.setPixelCount(10)
+fwdNeopixel.setMaxPower(450)
+fwdNeopixel.setBrightness(30)
 basic.forever(function () {
-    neopixel.showRainbow()
+    fwdNeopixel.showRainbow()
     basic.pause(1000)
 })
 ```
 
-### Example: 5×10 matrix with scrolling text
+### External 5V supply
+
+For longer strips, power the strip directly from an external 5V supply and
+route only the data and ground through the module. Then raise `max power` to
+match the supply:
+
+| External supply | max power setting |
+|----------------|-------------------|
+| 1 A | 1000 mA |
+| 2 A | 2000 mA |
+| 5 A | 5000 mA |
 
 ```blocks
-neopixel.setupMatrix(5, 10, true)
-neopixel.setBrightness(30)
+fwdNeopixel.setPixelCount(60)
+fwdNeopixel.setMaxPower(2000)
+fwdNeopixel.setBrightness(80)
 basic.forever(function () {
-    neopixel.showString("HELLO", 0xff0000)
-    neopixel.scrollMatrixRainbow(2)
-})
-```
-
-### Example: external 5V supply (60 pixels)
-
-When you power the neopixel strip from an external 5V supply (instead of the
-Jacdac bus), raise the max power limit to match your supply:
-
-```blocks
-neopixel.setPixelCount(60)
-neopixel.setMaxPower(10000)
-neopixel.setBrightness(80)
-basic.forever(function () {
-    neopixel.showRainbow()
+    fwdNeopixel.showRainbow()
     basic.pause(500)
 })
 ```
 
-## Matrix wiring
-
-A matrix maps a single continuous strip onto a 2-D grid. Two wiring styles are
-supported via the *serpentine* option in `setupMatrix`:
-
-| Style | Description |
-|---|---|
-| **Serpentine** (default) | Odd rows run right-to-left. Common for dense LED panels. |
-| **Grid** | Every row runs left-to-right. Less common but simpler to wire. |
-
-Pixel index formula:
-- Grid: `index = row × columns + column`
-- Serpentine: same, but odd rows count from the right
+When using an external supply, connect the supply's ground to the module's
+GND terminal so the data signal has a return path.
 
 ## Hardware
 
@@ -130,6 +113,9 @@ STATIC_ASSERT(PIN_AMOSI == PA_7 || PIN_AMOSI == PA_2 || PIN_AMOSI == PA_12);
 
 Build with `make TARGET=fwd-neopixel`.
 
+The firmware default for `max_power` is **450 mA** (bus-safe). It is a
+writable register, so programs can raise it when an external supply is used.
+
 ## API notes
 
 This extension wraps the Jacdac LED Strip client from
@@ -139,6 +125,3 @@ methods (`setPixelColor`, `setAll`, `show`, `setBrightness`, `setNumPixels`,
 release when first testing in MakeCode, as the auto-generated client API may
 evolve.
 
-## License
-
-MIT
