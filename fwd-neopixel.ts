@@ -80,7 +80,9 @@ namespace fwdNeopixel {
         // Use the `setall` light-program command (a direct fill) rather than
         // the client's setAll(), which emits `fade` — `fade` is for gradients
         // and does not reliably fill a solid color (especially black).
-        strip.runEncoded("setall #", [dim(color)])
+        // The trailing `wait 1` is the show/latch step that pushes the buffer
+        // to the physical LEDs; without it the change is never displayed.
+        strip.runEncoded("setall # wait 1", [dim(color)])
     }
 
     /**
@@ -92,7 +94,8 @@ namespace fwdNeopixel {
     export function clear(): void {
         ensureInit()
         for (let i = 0; i < _pixels.length; i++) _pixels[i] = 0
-        strip.runEncoded("setall #000000")
+        // `wait 1` shows/latches the cleared buffer to the physical LEDs.
+        strip.runEncoded("setall #000000 wait 1")
     }
 
     // ── Animations ────────────────────────────────────────────────
