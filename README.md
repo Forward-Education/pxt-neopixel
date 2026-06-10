@@ -24,20 +24,23 @@ In MakeCode for micro:bit (V2):
 ### Blocks
 
 **Pixels**
-- `set pixel [n] to [color]` — set one pixel
-- `set all pixels to [color]` — fill the strip
-- `show pixels` — push changes to the strip
+- `set pixel [n] to [color]` — set one pixel (applies immediately)
+- `set all pixels to [color]` — fill the strip (applies immediately)
 - `clear all pixels` — turn off all pixels
 
-**Animations**
-- `show rainbow` — rainbow cycle
-- `show sparkle` — sparkle effect
-- `rotate pixels` — shift pattern by one
+**Animations** (each runs for a duration in milliseconds)
+- `show rainbow for [n] ms`
+- `show sparkle for [n] ms`
+- `show comet for [n] ms`
 
 **Configuration**
 - `set brightness to [n] %` — global brightness (0–100)
 - `set pixel count to [n]` — number of pixels on the strip
 - `set max power to [n] mA` — current budget for auto-dimming (see Power below)
+
+> Note: pixel and animation commands apply immediately — there is no separate
+> "show" step. This matches the Jacdac LED Strip service model, where commands
+> are streamed to the module.
 
 ## Power — important!
 
@@ -48,17 +51,21 @@ exceed this limit. Each WS2812B pixel draws up to ~60 mA at full white.
 ### Bus-powered (default)
 
 When the strip's power comes from the Jacdac bus through the screw terminal,
-keep `max power` at **450 mA or below**. Setting it higher than the bus can
-actually supply will cause voltage sag and **reset the module** (status LED
-turns red, animations stop).
+keep `max power` at **450 mA or below**.
+
+Note that the `max_power` limit controls *average* current via auto-dimming,
+but it cannot suppress the brief current *inrush* when many pixels switch on
+at once during an animation. If the module resets during animations (status
+LED turns red), add a **1000 µF capacitor** across the strip's 5V and GND at
+the screw terminal — this absorbs the inrush and is the standard neopixel
+fix. A static (non-animated) frame does not have this problem.
 
 ```blocks
 fwdNeopixel.setPixelCount(10)
 fwdNeopixel.setMaxPower(450)
 fwdNeopixel.setBrightness(30)
 basic.forever(function () {
-    fwdNeopixel.showRainbow()
-    basic.pause(1000)
+    fwdNeopixel.showRainbow(2000)
 })
 ```
 
@@ -79,8 +86,7 @@ fwdNeopixel.setPixelCount(60)
 fwdNeopixel.setMaxPower(2000)
 fwdNeopixel.setBrightness(80)
 basic.forever(function () {
-    fwdNeopixel.showRainbow()
-    basic.pause(500)
+    fwdNeopixel.showRainbow(2000)
 })
 ```
 
@@ -118,10 +124,22 @@ writable register, so programs can raise it when an external supply is used.
 
 ## API notes
 
-This extension wraps the Jacdac LED Strip client from
-[pxt-jacdac](https://github.com/microsoft/pxt-jacdac). The client API
-methods (`setPixelColor`, `setAll`, `show`, `setBrightness`, `setNumPixels`,
-`setMaxPower`, `runEncoded`) should be verified against the current pxt-jacdac
-release when first testing in MakeCode, as the auto-generated client API may
-evolve.
+This extension wraps `modules.LedStripClient` from
+[pxt-jacdac](https://github.com/microsoft/pxt-jacdac) (`led-strip/client.ts`).
+Method mapping used by this extension:
 
+| Block | Client method |
+|-------|---------------|
+| set pixel | `setPixel(index, rgb)` |
+| set all pixels | `setAll(rgb)` |
+| brightness | `setBrightness(0..100)` |
+| pixel count | `setNumPixels(n)` |
+| max power | `setMaxPower(mA)` |
+| animations | `showAnimation(animation, durationMs)` |
+
+Animations use the built-in `modules.ledPixelAnimations` objects
+(`rainbowCycle`, `sparkle`, `comet`, and others).
+
+## License
+
+MIT

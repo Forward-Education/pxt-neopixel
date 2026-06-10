@@ -1,10 +1,11 @@
 /**
  * Forward Education Neopixel Module — MakeCode Extension
  *
- * Provides student-friendly blocks for controlling WS2812B neopixel strips
- * connected via the Forward Education Jacdac Neopixel module.
+ * Student-friendly blocks for controlling WS2812B neopixel strips connected
+ * via the Forward Education Jacdac Neopixel module.
  *
- * Wraps the Jacdac LED Strip client from pxt-jacdac.
+ * Wraps the Jacdac LED Strip client (modules.LedStripClient) from pxt-jacdac.
+ * Verified against pxt-jacdac master (led-strip/client.ts).
  */
 
 //% color="#FF6600" icon="\uf0eb" weight=90
@@ -15,7 +16,7 @@ namespace fwdNeopixel {
     // ── Pixel Control ─────────────────────────────────────────────
 
     /**
-     * Set the color of a single pixel.
+     * Set a single pixel to a color. Applies immediately.
      * @param pixel the pixel index (starting from 0)
      * @param color the RGB color value
      */
@@ -25,11 +26,11 @@ namespace fwdNeopixel {
     //% color.shadow="colorNumberPicker"
     //% weight=100
     export function setPixelColor(pixel: number, color: number): void {
-        strip.setPixelColor(pixel, color)
+        strip.setPixel(pixel, color)
     }
 
     /**
-     * Set all pixels to the same color.
+     * Set all pixels to the same color. Applies immediately.
      * @param color the RGB color value
      */
     //% block="set all pixels to $color"
@@ -41,16 +42,6 @@ namespace fwdNeopixel {
     }
 
     /**
-     * Push the current pixel buffer to the strip so changes become visible.
-     */
-    //% block="show pixels"
-    //% group="Pixels"
-    //% weight=90
-    export function show(): void {
-        strip.show()
-    }
-
-    /**
      * Turn off all pixels.
      */
     //% block="clear all pixels"
@@ -58,39 +49,47 @@ namespace fwdNeopixel {
     //% weight=85
     export function clear(): void {
         strip.setAll(0x000000)
-        strip.show()
     }
 
     // ── Animations ────────────────────────────────────────────────
 
     /**
-     * Run a rainbow animation across the strip.
+     * Show a rainbow animation for a duration.
+     * @param duration how long to run, in milliseconds
      */
-    //% block="show rainbow"
+    //% block="show rainbow for $duration ms"
     //% group="Animations"
+    //% duration.shadow="timePicker"
+    //% duration.defl=2000
     //% weight=80
-    export function showRainbow(): void {
-        strip.runEncoded("rainbow")
+    export function showRainbow(duration: number): void {
+        strip.showAnimation(modules.ledPixelAnimations.rainbowCycle, duration)
     }
 
     /**
-     * Run a sparkle animation.
+     * Show a sparkle animation for a duration.
+     * @param duration how long to run, in milliseconds
      */
-    //% block="show sparkle"
+    //% block="show sparkle for $duration ms"
     //% group="Animations"
+    //% duration.shadow="timePicker"
+    //% duration.defl=2000
     //% weight=75
-    export function showSparkle(): void {
-        strip.runEncoded("sparkle")
+    export function showSparkle(duration: number): void {
+        strip.showAnimation(modules.ledPixelAnimations.sparkle, duration)
     }
 
     /**
-     * Rotate the pixel pattern forward by one step.
+     * Show a comet animation for a duration.
+     * @param duration how long to run, in milliseconds
      */
-    //% block="rotate pixels"
+    //% block="show comet for $duration ms"
     //% group="Animations"
+    //% duration.shadow="timePicker"
+    //% duration.defl=2000
     //% weight=70
-    export function rotatePixels(): void {
-        strip.runEncoded("rotfwd 1")
+    export function showComet(duration: number): void {
+        strip.showAnimation(modules.ledPixelAnimations.comet, duration)
     }
 
     // ── Configuration ─────────────────────────────────────────────
@@ -101,10 +100,10 @@ namespace fwdNeopixel {
      */
     //% block="set brightness to $brightness \\%"
     //% group="Configuration"
-    //% brightness.min=0 brightness.max=100 brightness.defl=50
+    //% brightness.min=0 brightness.max=100 brightness.defl=30
     //% weight=60
     export function setBrightness(brightness: number): void {
-        strip.setBrightness(brightness / 100)
+        strip.setBrightness(brightness)
     }
 
     /**
@@ -125,9 +124,9 @@ namespace fwdNeopixel {
      *
      * Keep the default (450 mA) when powering neopixels from the Jacdac bus.
      * Raise this only when you supply external 5V power directly to the strip:
-     *   - 1A supply  → 1000 mA
-     *   - 2A supply  → 2000 mA
-     *   - 5A supply  → 5000 mA
+     *   - 1A supply  -> 1000 mA
+     *   - 2A supply  -> 2000 mA
+     *   - 5A supply  -> 5000 mA
      *
      * Each WS2812B pixel draws up to ~60 mA at full white.
      *
