@@ -128,16 +128,25 @@ This extension wraps `modules.LedStripClient` from
 [pxt-jacdac](https://github.com/microsoft/pxt-jacdac) (`led-strip/client.ts`).
 Method mapping used by this extension:
 
+<<<<<<< Updated upstream
 | Block | Implementation |
 |-------|----------------|
 | set pixel | `setPixel(index, rgb)` (RGB scaled by software brightness) |
 | set all pixels | `runEncoded("setall #", [rgb])` (RGB scaled by software brightness) |
 | clear all pixels | `runEncoded("setall #000000")` |
 | brightness | software RGB scaling (0–100); firmware register pinned at max |
+=======
+| Block | Client method |
+|-------|---------------|
+| set pixel | `setPixel(index, rgb)` |
+| set all pixels | `setAll(rgb)` |
+| brightness | `setBrightness(0..100)` |
+>>>>>>> Stashed changes
 | pixel count | `setNumPixels(n)` |
 | max power | `setMaxPower(mA)` |
 | animations | `showAnimation(animation, durationMs)` |
 
+<<<<<<< Updated upstream
 > Brightness is applied in software because the module firmware does not honor
 > the Jacdac `brightness` register. The extension scales each pixel's RGB value
 > and keeps a logical pixel buffer so changing brightness re-applies to
@@ -145,6 +154,8 @@ Method mapping used by this extension:
 > than the client's `setAll()` (which emits `fade`, a gradient command that does
 > not reliably produce a solid color — especially black).
 
+=======
+>>>>>>> Stashed changes
 Animations use the built-in `modules.ledPixelAnimations` objects
 (`rainbowCycle`, `sparkle`, `comet`, and others).
 

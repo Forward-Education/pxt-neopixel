@@ -6,9 +6,12 @@
  *
  * Wraps the Jacdac LED Strip client (modules.LedStripClient) from pxt-jacdac.
  * Verified against pxt-jacdac master (led-strip/client.ts).
+<<<<<<< Updated upstream
  *
  * Brightness is applied in software (RGB scaling), and solid fills use the
  * `setall` light-program command — see the notes in setBrightness/setAllPixels.
+=======
+>>>>>>> Stashed changes
  */
 
 //% color="#FF6600" icon="\uf0eb" weight=90
@@ -16,6 +19,7 @@
 namespace fwdNeopixel {
     const strip = new modules.LedStripClient("fwd neopixel")
 
+<<<<<<< Updated upstream
     // ── Internal state ────────────────────────────────────────────
     // Brightness is applied in software (we scale each pixel's RGB before
     // sending) because the module firmware does not honor the Jacdac
@@ -47,6 +51,8 @@ namespace fwdNeopixel {
         }
     }
 
+=======
+>>>>>>> Stashed changes
     // ── Pixel Control ─────────────────────────────────────────────
 
     /**
@@ -60,10 +66,14 @@ namespace fwdNeopixel {
     //% color.shadow="colorNumberPicker"
     //% weight=100
     export function setPixelColor(pixel: number, color: number): void {
+<<<<<<< Updated upstream
         ensureInit()
         while (_pixels.length <= pixel) _pixels.push(0)
         _pixels[pixel] = color
         strip.setPixel(pixel, dim(color))
+=======
+        strip.setPixel(pixel, color)
+>>>>>>> Stashed changes
     }
 
     /**
@@ -75,12 +85,16 @@ namespace fwdNeopixel {
     //% color.shadow="colorNumberPicker"
     //% weight=95
     export function setAllPixels(color: number): void {
+<<<<<<< Updated upstream
         ensureInit()
         for (let i = 0; i < _pixels.length; i++) _pixels[i] = color
         // Use the `setall` light-program command (a direct fill) rather than
         // the client's setAll(), which emits `fade` — `fade` is for gradients
         // and does not reliably fill a solid color (especially black).
         strip.runEncoded("setall #", [dim(color)])
+=======
+        strip.setAll(color)
+>>>>>>> Stashed changes
     }
 
     /**
@@ -90,9 +104,13 @@ namespace fwdNeopixel {
     //% group="Pixels"
     //% weight=85
     export function clear(): void {
+<<<<<<< Updated upstream
         ensureInit()
         for (let i = 0; i < _pixels.length; i++) _pixels[i] = 0
         strip.runEncoded("setall #000000")
+=======
+        strip.setAll(0x000000)
+>>>>>>> Stashed changes
     }
 
     // ── Animations ────────────────────────────────────────────────
@@ -147,10 +165,14 @@ namespace fwdNeopixel {
     //% brightness.min=0 brightness.max=100 brightness.defl=30
     //% weight=60
     export function setBrightness(brightness: number): void {
+<<<<<<< Updated upstream
         ensureInit()
         _brightness = Math.max(0, Math.min(100, brightness))
         // Re-apply to already-lit pixels so the change is visible immediately.
         refresh()
+=======
+        strip.setBrightness(brightness)
+>>>>>>> Stashed changes
     }
 
     /**
@@ -162,7 +184,10 @@ namespace fwdNeopixel {
     //% count.min=1 count.max=300 count.defl=30
     //% weight=55
     export function setPixelCount(count: number): void {
+<<<<<<< Updated upstream
         ensureInit()
+=======
+>>>>>>> Stashed changes
         strip.setNumPixels(count)
         // Resize the logical buffer, preserving existing colors.
         const next: number[] = []
