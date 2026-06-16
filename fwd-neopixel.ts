@@ -50,9 +50,12 @@ namespace fwdNeopixel {
     }
 
     // Send a light program redundantly so a dropped packet doesn't lose it.
+    // lightEncode() consumes the args array with shift(), so each repeat must
+    // get its own copy — otherwise the second send sees an empty array and
+    // throws "Out of args" (which panics the micro:bit with code 999).
     function send(prog: string, args?: number[]): void {
         for (let k = 0; k < SEND_REPEATS; k++) {
-            strip.runEncoded(prog, args)
+            strip.runEncoded(prog, args ? args.slice() : undefined)
             pause(SEND_GAP)
         }
     }
