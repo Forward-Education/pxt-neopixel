@@ -25,20 +25,23 @@ namespace fwdNeopixel {
     let _pixels: number[] = []           // logical (un-scaled) RGB per pixel
     let _initialized = false
 
-    // How many times each light-program command is repeated. Jacdac `Run`
-    // commands are unacknowledged and can be silently dropped on the bus, which
-    // showed up as intermittent clear / black / brightness changes. Re-sending
-    // the same (idempotent) frame a few times makes a single drop harmless.
-    const SEND_REPEATS = 3
-    const SEND_GAP = 8                   // ms between repeats
+    // Pacing between light-program commands. Each pixel update is one Jacdac
+    // `Run` command; send them ONCE and paced. Flooding the bus (e.g. repeating
+    // every command) overflows the send queue and the *tail* of a burst is
+    // dropped — which showed up as "the last pixel never clears". A short gap
+    // lets the queue drain between commands.
+    const SEND_GAP = 6                   // ms between commands
+    const DRAIN = 40                     // ms after a multi-pixel op, to flush
 
-    // Start the client and give the module a moment to connect before the
-    // first command — commands sent during bus enumeration are lost.
+    // Start the client and wait until the module is actually connected before
+    // the first command — commands sent during bus enumeration are dropped
+    // (this is why a cold first press only lit the last pixel or two).
     function ensureInit(): void {
         if (_initialized) return
         _initialized = true
         strip.setBrightness(100)         // also calls start() internally
-        pause(200)                       // let the module finish connecting
+        pauseUntil(() => strip.isConnected(), 3000)
+        pause(50)                        // small settle after connect
     }
 
     // Scale an RGB color by the current software brightness.
@@ -49,25 +52,22 @@ namespace fwdNeopixel {
         return (r << 16) | (g << 8) | b
     }
 
-    // Send a light program redundantly so a dropped packet doesn't lose it.
-    // lightEncode() consumes the args array with shift(), so each repeat must
-    // get its own copy — otherwise the second send sees an empty array and
-    // throws "Out of args" (which panics the micro:bit with code 999).
+    // Send one light program, paced. Single-command strings only — chaining
+    // commands in one string can make lightEncode throw (panic 999).
+    // (lightEncode also consumes args via shift(); not reused here, but slice()
+    // keeps the caller's array intact.)
     function send(prog: string, args?: number[]): void {
-        for (let k = 0; k < SEND_REPEATS; k++) {
-            strip.runEncoded(prog, args ? args.slice() : undefined)
-            pause(SEND_GAP)
-        }
+        strip.runEncoded(prog, args ? args.slice() : undefined)
+        pause(SEND_GAP)
     }
 
-    // Re-send every stored pixel at the current brightness. One command per
-    // pixel — the single-command form is the only light-program string the
-    // jacdac encoder reliably accepts; chaining commands in one string can
-    // make lightEncode throw (which panics the micro:bit with code 999).
+    // Re-send every stored pixel at the current brightness, one command per
+    // pixel, then wait for the queue to drain so the last pixel isn't dropped.
     function refresh(): void {
         for (let i = 0; i < _pixels.length; i++) {
             send("setone % # wait 1", [i, dim(_pixels[i])])
         }
+        pause(DRAIN)
     }
 
     // Fill the whole declared strip with one color (0 clears). Always per-pixel
