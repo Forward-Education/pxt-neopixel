@@ -70,6 +70,22 @@ namespace fwdNeopixel {
         }
     }
 
+    // Fill the whole declared strip with one color (0 clears). Always per-pixel
+    // so `set all` and `clear` cover exactly the same pixels — otherwise a
+    // `setall` fill (firmware count) and a per-pixel clear (buffer count) can
+    // disagree and leave a pixel on.
+    function fill(color: number): void {
+        for (let i = 0; i < _pixels.length; i++) _pixels[i] = color
+        if (_pixels.length > 0) {
+            refresh()
+        } else {
+            // No pixel count set yet — best-effort single command.
+            const c = dim(color)
+            if (c == 0) send("setall #000000 wait 1")
+            else send("setall # wait 1", [c])
+        }
+    }
+
     // ── Pixel Control ─────────────────────────────────────────────
 
     /**
@@ -99,17 +115,7 @@ namespace fwdNeopixel {
     //% weight=95
     export function setAllPixels(color: number): void {
         ensureInit()
-        for (let i = 0; i < _pixels.length; i++) _pixels[i] = color
-        const c = dim(color)
-        if (c == 0) {
-            // `setall #000000` does not turn pixels off on this firmware, but
-            // per-pixel `setone … 0` does — so clear via the per-pixel path.
-            refresh()
-        } else {
-            // `setall` is a direct fill (the client's setAll() emits `fade`, a
-            // gradient command). The trailing `wait 1` shows/latches the frame.
-            send("setall # wait 1", [c])
-        }
+        fill(color)
     }
 
     /**
@@ -120,10 +126,7 @@ namespace fwdNeopixel {
     //% weight=85
     export function clear(): void {
         ensureInit()
-        for (let i = 0; i < _pixels.length; i++) _pixels[i] = 0
-        // `setall #000000` does not turn pixels off on this firmware; clear by
-        // sending `setone … 0` per pixel (the proven path), via refresh().
-        refresh()
+        fill(0)
     }
 
     // ── Animations ────────────────────────────────────────────────
