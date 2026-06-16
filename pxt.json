@@ -1,6 +1,6 @@
 {
     "name": "pxt-neopixel",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "description": "Forward Education Neopixel Module for Jacdac on micro:bit",
     "dependencies": {
         "core": "*",

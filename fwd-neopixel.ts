@@ -25,10 +25,20 @@ namespace fwdNeopixel {
     let _pixels: number[] = []           // logical (un-scaled) RGB per pixel
     let _initialized = false
 
-    // Pin firmware brightness to max once, lazily on first use.
+    // How many times each light-program command is repeated. Jacdac `Run`
+    // commands are unacknowledged and can be silently dropped on the bus, which
+    // showed up as intermittent clear / black / brightness changes. Re-sending
+    // the same (idempotent) frame a few times makes a single drop harmless.
+    const SEND_REPEATS = 3
+    const SEND_GAP = 8                   // ms between repeats
+
+    // Start the client and wait until the module is actually connected before
+    // the first command — commands sent during bus enumeration are lost.
     function ensureInit(): void {
         if (_initialized) return
         _initialized = true
+        strip.setBrightness(100)         // also calls start() internally
+        pauseUntil(() => strip.isConnected(), 3000)
         strip.setBrightness(100)
     }
 
@@ -40,11 +50,33 @@ namespace fwdNeopixel {
         return (r << 16) | (g << 8) | b
     }
 
-    // Re-send every stored pixel at the current brightness.
-    function refresh(): void {
-        for (let i = 0; i < _pixels.length; i++) {
-            strip.setPixel(i, dim(_pixels[i]))
+    // Send a light program redundantly so a dropped packet doesn't lose it.
+    function send(prog: string, args?: number[]): void {
+        for (let k = 0; k < SEND_REPEATS; k++) {
+            strip.runEncoded(prog, args)
+            pause(SEND_GAP)
         }
+    }
+
+    // Re-send every stored pixel at the current brightness, as one program per
+    // chunk (kept small enough to fit a single Jacdac packet).
+    function refresh(): void {
+        let prog = ""
+        let args: number[] = []
+        let n = 0
+        for (let i = 0; i < _pixels.length; i++) {
+            prog += "setone % # "
+            args.push(i)
+            args.push(dim(_pixels[i]))
+            n++
+            if (n >= 30) {               // flush chunk
+                send(prog + "wait 1", args)
+                prog = ""
+                args = []
+                n = 0
+            }
+        }
+        if (n > 0) send(prog + "wait 1", args)
     }
 
     // ── Pixel Control ─────────────────────────────────────────────
@@ -63,7 +95,7 @@ namespace fwdNeopixel {
         ensureInit()
         while (_pixels.length <= pixel) _pixels.push(0)
         _pixels[pixel] = color
-        strip.setPixel(pixel, dim(color))
+        send("setone % # wait 1", [pixel, dim(color)])
     }
 
     /**
@@ -82,7 +114,7 @@ namespace fwdNeopixel {
         // and does not reliably fill a solid color (especially black).
         // The trailing `wait 1` is the show/latch step that pushes the buffer
         // to the physical LEDs; without it the change is never displayed.
-        strip.runEncoded("setall # wait 1", [dim(color)])
+        send("setall # wait 1", [dim(color)])
     }
 
     /**
@@ -95,7 +127,7 @@ namespace fwdNeopixel {
         ensureInit()
         for (let i = 0; i < _pixels.length; i++) _pixels[i] = 0
         // `wait 1` shows/latches the cleared buffer to the physical LEDs.
-        strip.runEncoded("setall #000000 wait 1")
+        send("setall #000000 wait 1")
     }
 
     // ── Animations ────────────────────────────────────────────────
