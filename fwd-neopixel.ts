@@ -32,14 +32,13 @@ namespace fwdNeopixel {
     const SEND_REPEATS = 3
     const SEND_GAP = 8                   // ms between repeats
 
-    // Start the client and wait until the module is actually connected before
-    // the first command — commands sent during bus enumeration are lost.
+    // Start the client and give the module a moment to connect before the
+    // first command — commands sent during bus enumeration are lost.
     function ensureInit(): void {
         if (_initialized) return
         _initialized = true
         strip.setBrightness(100)         // also calls start() internally
-        pauseUntil(() => strip.isConnected(), 3000)
-        strip.setBrightness(100)
+        pause(200)                       // let the module finish connecting
     }
 
     // Scale an RGB color by the current software brightness.
@@ -58,25 +57,14 @@ namespace fwdNeopixel {
         }
     }
 
-    // Re-send every stored pixel at the current brightness, as one program per
-    // chunk (kept small enough to fit a single Jacdac packet).
+    // Re-send every stored pixel at the current brightness. One command per
+    // pixel — the single-command form is the only light-program string the
+    // jacdac encoder reliably accepts; chaining commands in one string can
+    // make lightEncode throw (which panics the micro:bit with code 999).
     function refresh(): void {
-        let prog = ""
-        let args: number[] = []
-        let n = 0
         for (let i = 0; i < _pixels.length; i++) {
-            prog += "setone % # "
-            args.push(i)
-            args.push(dim(_pixels[i]))
-            n++
-            if (n >= 30) {               // flush chunk
-                send(prog + "wait 1", args)
-                prog = ""
-                args = []
-                n = 0
-            }
+            send("setone % # wait 1", [i, dim(_pixels[i])])
         }
-        if (n > 0) send(prog + "wait 1", args)
     }
 
     // ── Pixel Control ─────────────────────────────────────────────
