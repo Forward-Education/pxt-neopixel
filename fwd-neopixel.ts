@@ -100,12 +100,16 @@ namespace fwdNeopixel {
     export function setAllPixels(color: number): void {
         ensureInit()
         for (let i = 0; i < _pixels.length; i++) _pixels[i] = color
-        // Use the `setall` light-program command (a direct fill) rather than
-        // the client's setAll(), which emits `fade` — `fade` is for gradients
-        // and does not reliably fill a solid color (especially black).
-        // The trailing `wait 1` is the show/latch step that pushes the buffer
-        // to the physical LEDs; without it the change is never displayed.
-        send("setall # wait 1", [dim(color)])
+        const c = dim(color)
+        if (c == 0) {
+            // `setall #000000` does not turn pixels off on this firmware, but
+            // per-pixel `setone … 0` does — so clear via the per-pixel path.
+            refresh()
+        } else {
+            // `setall` is a direct fill (the client's setAll() emits `fade`, a
+            // gradient command). The trailing `wait 1` shows/latches the frame.
+            send("setall # wait 1", [c])
+        }
     }
 
     /**
@@ -117,8 +121,9 @@ namespace fwdNeopixel {
     export function clear(): void {
         ensureInit()
         for (let i = 0; i < _pixels.length; i++) _pixels[i] = 0
-        // `wait 1` shows/latches the cleared buffer to the physical LEDs.
-        send("setall #000000 wait 1")
+        // `setall #000000` does not turn pixels off on this firmware; clear by
+        // sending `setone … 0` per pixel (the proven path), via refresh().
+        refresh()
     }
 
     // ── Animations ────────────────────────────────────────────────
