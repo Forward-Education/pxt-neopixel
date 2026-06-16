@@ -23,15 +23,11 @@ namespace fwdNeopixel {
     // it can never dim on top of our scaling.
     let _brightness = 30                 // 0–100, percent
     let _pixels: number[] = []           // logical (un-scaled) RGB per pixel
+    let _uniform = false                 // whole strip is one color (_fillColor)
+    let _fillColor = 0
     let _initialized = false
 
-    // Pacing between light-program commands. Each pixel update is one Jacdac
-    // `Run` command; send them ONCE and paced. Flooding the bus (e.g. repeating
-    // every command) overflows the send queue and the *tail* of a burst is
-    // dropped — which showed up as "the last pixel never clears". A short gap
-    // lets the queue drain between commands.
-    const SEND_GAP = 6                   // ms between commands
-    const DRAIN = 40                     // ms after a multi-pixel op, to flush
+    const SEND_GAP = 6                   // ms between the two copies of a command
 
     // Start the client and wait until the module is actually connected before
     // the first command — commands sent during bus enumeration are dropped
@@ -52,38 +48,31 @@ namespace fwdNeopixel {
         return (r << 16) | (g << 8) | b
     }
 
-    // Send one light program, paced. Single-command strings only — chaining
-    // commands in one string can make lightEncode throw (panic 999).
-    // (lightEncode also consumes args via shift(); not reused here, but slice()
-    // keeps the caller's array intact.)
+    // Send one light program twice (Run commands are unacknowledged; a second
+    // copy covers an occasional drop without flooding the bus). Single-command
+    // strings only — chaining commands in one string can make lightEncode throw.
+    // lightEncode consumes args via shift(), so each copy gets its own slice().
     function send(prog: string, args?: number[]): void {
+        strip.runEncoded(prog, args ? args.slice() : undefined)
+        pause(SEND_GAP)
         strip.runEncoded(prog, args ? args.slice() : undefined)
         pause(SEND_GAP)
     }
 
-    // Re-send every stored pixel at the current brightness, one command per
-    // pixel, then wait for the queue to drain so the last pixel isn't dropped.
+    // Re-send every stored pixel at the current brightness (used only when the
+    // strip is NOT a single uniform color — uniform re-apply uses one setall).
     function refresh(): void {
         for (let i = 0; i < _pixels.length; i++) {
             send("setone % # wait 1", [i, dim(_pixels[i])])
         }
-        pause(DRAIN)
     }
 
-    // Fill the whole declared strip with one color (0 clears). Always per-pixel
-    // so `set all` and `clear` cover exactly the same pixels — otherwise a
-    // `setall` fill (firmware count) and a per-pixel clear (buffer count) can
-    // disagree and leave a pixel on.
+    // Fill the whole strip with one color (0 clears) in a single atomic command.
     function fill(color: number): void {
         for (let i = 0; i < _pixels.length; i++) _pixels[i] = color
-        if (_pixels.length > 0) {
-            refresh()
-        } else {
-            // No pixel count set yet — best-effort single command.
-            const c = dim(color)
-            if (c == 0) send("setall #000000 wait 1")
-            else send("setall # wait 1", [c])
-        }
+        _uniform = true
+        _fillColor = color
+        send("setall # wait 1", [dim(color)])
     }
 
     // ── Pixel Control ─────────────────────────────────────────────
@@ -102,6 +91,7 @@ namespace fwdNeopixel {
         ensureInit()
         while (_pixels.length <= pixel) _pixels.push(0)
         _pixels[pixel] = color
+        _uniform = false
         send("setone % # wait 1", [pixel, dim(color)])
     }
 
@@ -184,7 +174,9 @@ namespace fwdNeopixel {
         ensureInit()
         _brightness = Math.max(0, Math.min(100, brightness))
         // Re-apply to already-lit pixels so the change is visible immediately.
-        refresh()
+        // Uniform strip → one fast setall; mixed pixels → per-pixel re-apply.
+        if (_uniform) send("setall # wait 1", [dim(_fillColor)])
+        else refresh()
     }
 
     /**
