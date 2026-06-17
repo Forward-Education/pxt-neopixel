@@ -72,7 +72,15 @@ namespace fwdNeopixel {
         for (let i = 0; i < _pixels.length; i++) _pixels[i] = color
         _uniform = true
         _fillColor = color
-        send("setall # wait 1", [dim(color)])
+        const c = dim(color)
+        if (c == 0) {
+            // `setall #000000` is a no-op on this module's firmware. Zero every
+            // pixel via the multiply path instead (`mult 0` = multiply by 0),
+            // which is a single fast command on a different firmware code path.
+            send("mult 0 wait 1")
+        } else {
+            send("setall # wait 1", [c])
+        }
     }
 
     // ── Pixel Control ─────────────────────────────────────────────
@@ -174,8 +182,8 @@ namespace fwdNeopixel {
         ensureInit()
         _brightness = Math.max(0, Math.min(100, brightness))
         // Re-apply to already-lit pixels so the change is visible immediately.
-        // Uniform strip → one fast setall; mixed pixels → per-pixel re-apply.
-        if (_uniform) send("setall # wait 1", [dim(_fillColor)])
+        // Uniform strip → one fast fill; mixed pixels → per-pixel re-apply.
+        if (_uniform) fill(_fillColor)
         else refresh()
     }
 
