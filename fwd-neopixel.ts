@@ -11,7 +11,7 @@
  * `setall` light-program command — see the notes in setBrightness/setAllPixels.
  */
 
-//% color="#FF6600" icon="\uf0eb" weight=90
+//% color="#FF6600" icon="\uf0eb" weight=90 block="Neopixel"
 //% groups="['Pixels', 'Animations', 'Configuration']"
 namespace fwdNeopixel {
     const strip = new modules.LedStripClient("fwd neopixel")
@@ -72,15 +72,7 @@ namespace fwdNeopixel {
         for (let i = 0; i < _pixels.length; i++) _pixels[i] = color
         _uniform = true
         _fillColor = color
-        const c = dim(color)
-        if (c == 0) {
-            // `setall #000000` is a no-op on this module's firmware. Zero every
-            // pixel via the multiply path instead (`mult 0` = multiply by 0),
-            // which is a single fast command on a different firmware code path.
-            send("mult 0 wait 1")
-        } else {
-            send("setall # wait 1", [c])
-        }
+        send("setall # wait 1", [dim(color)])
     }
 
     // ── Pixel Control ─────────────────────────────────────────────

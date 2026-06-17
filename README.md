@@ -117,6 +117,31 @@ STATIC_ASSERT(PIN_AMOSI == PA_7 || PIN_AMOSI == PA_2);
 STATIC_ASSERT(PIN_AMOSI == PA_7 || PIN_AMOSI == PA_2 || PIN_AMOSI == PA_12);
 ```
 
+**Required firmware change (clearing / black):** the LED-strip service skips
+transmitting an all-black frame and instead cuts the strip power pin — intended
+to save power when everything is off. This module has no such power switch, so
+the all-black frame is never sent and the pixels stay latched on their last
+color (clear / set-to-black appears to do nothing). Two coordinated changes fix
+it:
+
+1. `targets/fwd-neopixel/board.h`: set `#define PIN_PWR -1` (no power pin).
+2. `jacdac-c/services/ledstrip.c`: guard the all-black skip so it only runs
+   when there is a real power pin:
+
+```c
+#if PIN_PWR >= 0
+    if (is_empty((uint32_t *)state->pxbuffer, PX_WORDS(state->numpixels))) {
+        jd_power_enable(0);
+        return;
+    } else {
+        jd_power_enable(1);
+    }
+#endif
+```
+
+(Newer upstream `jacdac-c` already has this `#if PIN_PWR >= 0` guard; older
+vendored copies run the skip unconditionally.)
+
 Build with `make TARGET=fwd-neopixel`.
 
 The firmware default for `max_power` is **450 mA** (bus-safe). It is a
