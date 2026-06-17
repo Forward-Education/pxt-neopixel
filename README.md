@@ -37,7 +37,8 @@ In MakeCode for micro:bit (V2):
 - `set matrix pixel row [r] column [c] to [color]`
 - `set row [r] to [color]` / `set column [c] to [color]`
 - `fill area row [r] column [c] width [w] height [h] with [color]`
-- `scroll text [text] in [color]` — scrolls A–Z, 0–9, space (5-tall font)
+- `scroll text [text] in [color]` — scrolls A–Z, 0–9, space; the font
+  auto-scales to the matrix height and is vertically centered
 - `scroll number [n] in [color]`
 - `matrix rainbow [cycles] times` — rainbow sweep across the columns
 

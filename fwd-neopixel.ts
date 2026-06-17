@@ -306,7 +306,7 @@ namespace fwdNeopixel {
 
     /**
      * Scroll text across the matrix from right to left.
-     * Set up the matrix first (at least 5 rows tall for full letters).
+     * The font auto-scales to the matrix height and is centered vertically.
      * @param text the text to display (A–Z, 0–9, space)
      * @param color the pixel color
      * @param speed milliseconds per scroll step
@@ -321,21 +321,27 @@ namespace fwdNeopixel {
     export function scrollText(text: string, color: number, speed = 80): void {
         ensureInit()
         if (_rows < 1 || _cols < 1) return
-        const rows = Math.min(_rows, 5)
-        const totalCols = text.length * 4    // 3 px wide + 1 spacer per char
+        // Integer-scale the 3x5 font to fit the matrix height, and center it.
+        const sc = Math.max(1, Math.idiv(_rows, 5))        // 5-tall -> 1x, 10 -> 2x …
+        const rowOff = Math.max(0, Math.idiv(_rows - 5 * sc, 2))
+        const advance = 4 * sc                             // 3 glyph + 1 spacer, scaled
+        const totalCols = text.length * advance
         const frame: number[] = []
         for (let i = 0; i < _rows * _cols; i++) frame.push(0)
-        for (let s = 0; s < _cols + totalCols; s++) {
+        for (let s = 0; s <= _cols + totalCols; s++) {
             for (let i = 0; i < frame.length; i++) frame[i] = 0
             for (let m = 0; m < _cols; m++) {
-                const cc = m - _cols + s
+                const cc = m - _cols + s                   // virtual (scaled) column
                 if (cc < 0 || cc >= totalCols) continue
-                const charIdx = Math.idiv(cc, 4)
-                const colInChar = cc % 4
-                if (charIdx >= text.length || colInChar >= 3) continue
+                const charIdx = Math.idiv(cc, advance)
+                const fcol = Math.idiv(cc % advance, sc)   // 0–2 glyph, 3 = spacer
+                if (charIdx >= text.length || fcol >= 3) continue
                 const fi = fontIndex(text.charCodeAt(charIdx))
-                for (let r = 0; r < rows; r++) {
-                    if (((FONT_DATA[fi * 5 + r] >> (2 - colInChar)) & 1) == 1) {
+                for (let r = 0; r < _rows; r++) {
+                    const vr = r - rowOff                   // position within scaled glyph
+                    if (vr < 0 || vr >= 5 * sc) continue
+                    const frow = Math.idiv(vr, sc)          // 0–4
+                    if (((FONT_DATA[fi * 5 + frow] >> (2 - fcol)) & 1) == 1) {
                         const idx = matrixIndex(r, m)
                         if (idx >= 0) frame[idx] = color
                     }
