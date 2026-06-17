@@ -1,43 +1,62 @@
 /**
  * Forward Education Neopixel Module — MakeCode Extension
  *
- * Student-friendly blocks for controlling WS2812B neopixel strips connected
- * via the Forward Education Jacdac Neopixel module.
+ * Student-friendly blocks for controlling WS2812B neopixel strips, rings, and
+ * matrices connected via the Forward Education Jacdac Neopixel module.
  *
  * Wraps the Jacdac LED Strip client (modules.LedStripClient) from pxt-jacdac.
- * Verified against pxt-jacdac master (led-strip/client.ts).
  *
- * Brightness is applied in software (RGB scaling), and solid fills use the
- * `setall` light-program command — see the notes in setBrightness/setAllPixels.
+ * Brightness is applied in software (RGB scaling). Fills/clear use a single
+ * atomic `setall`; matrix frames are pushed as chunked multi-`setone` programs.
  */
 
-//% color="#FF6600" icon="\uf0eb" weight=90 block="Neopixel"
-//% groups="['Pixels', 'Animations', 'Configuration']"
+/**
+ * Built-in strip/ring animations (run on the module firmware).
+ */
+enum NeoAnimation {
+    //% block="rainbow"
+    Rainbow,
+    //% block="comet"
+    Comet,
+    //% block="sparkle"
+    Sparkle,
+    //% block="running lights"
+    RunningLights,
+    //% block="color wipe"
+    ColorWipe,
+    //% block="theater chase"
+    TheaterChase,
+    //% block="firefly"
+    Firefly
+}
+
+//% color="#FF6600" icon="" weight=90 block="Neopixel"
+//% groups="['Pixels', 'Matrix', 'Animations', 'Configuration']"
 namespace fwdNeopixel {
     const strip = new modules.LedStripClient("fwd neopixel")
 
     // ── Internal state ────────────────────────────────────────────
-    // Brightness is applied in software (we scale each pixel's RGB before
-    // sending) because the module firmware does not honor the Jacdac
-    // brightness register. We keep the firmware register pinned at full so
-    // it can never dim on top of our scaling.
-    let _brightness = 30                 // 0–100, percent
+    let _brightness = 30                 // 0–100, percent (software scaling)
     let _pixels: number[] = []           // logical (un-scaled) RGB per pixel
     let _uniform = false                 // whole strip is one color (_fillColor)
     let _fillColor = 0
     let _initialized = false
 
-    const SEND_GAP = 6                   // ms between the two copies of a command
+    // Matrix layout (0 = not configured as a matrix)
+    let _rows = 0
+    let _cols = 0
+    let _serpentine = true
 
-    // Start the client and wait until the module is actually connected before
-    // the first command — commands sent during bus enumeration are dropped
-    // (this is why a cold first press only lit the last pixel or two).
+    const SEND_GAP = 6                   // ms between sends
+
+    // Start the client and wait for the module to connect before the first
+    // command — commands sent during bus enumeration are dropped.
     function ensureInit(): void {
         if (_initialized) return
         _initialized = true
-        strip.setBrightness(100)         // also calls start() internally
+        strip.setBrightness(100)         // firmware at full; we scale in software
         pauseUntil(() => strip.isConnected(), 3000)
-        pause(50)                        // small settle after connect
+        pause(50)
     }
 
     // Scale an RGB color by the current software brightness.
@@ -49,9 +68,8 @@ namespace fwdNeopixel {
     }
 
     // Send one light program twice (Run commands are unacknowledged; a second
-    // copy covers an occasional drop without flooding the bus). Single-command
-    // strings only — chaining commands in one string can make lightEncode throw.
-    // lightEncode consumes args via shift(), so each copy gets its own slice().
+    // copy covers an occasional drop). lightEncode consumes args via shift(),
+    // so each copy gets its own slice().
     function send(prog: string, args?: number[]): void {
         strip.runEncoded(prog, args ? args.slice() : undefined)
         pause(SEND_GAP)
@@ -59,8 +77,7 @@ namespace fwdNeopixel {
         pause(SEND_GAP)
     }
 
-    // Re-send every stored pixel at the current brightness (used only when the
-    // strip is NOT a single uniform color — uniform re-apply uses one setall).
+    // Re-send every stored pixel at the current brightness (mixed colors).
     function refresh(): void {
         for (let i = 0; i < _pixels.length; i++) {
             send("setone % # wait 1", [i, dim(_pixels[i])])
@@ -73,6 +90,42 @@ namespace fwdNeopixel {
         _uniform = true
         _fillColor = color
         send("setall # wait 1", [dim(color)])
+    }
+
+    // Push a full frame of raw RGB colors. Many `setone` per packet (kept under
+    // the Jacdac packet size), sent once per frame — animation frames refresh
+    // continuously, so a dropped frame self-heals on the next one.
+    function pushFrame(frame: number[]): void {
+        let prog = ""
+        let args: number[] = []
+        let n = 0
+        for (let i = 0; i < frame.length; i++) {
+            prog += "setone % # "
+            args.push(i)
+            args.push(dim(frame[i]))
+            n++
+            if (n >= 25) {               // flush a chunk (~150 bytes)
+                strip.runEncoded(prog + "wait 1", args)
+                pause(SEND_GAP)
+                prog = ""
+                args = []
+                n = 0
+            }
+        }
+        if (n > 0) {
+            strip.runEncoded(prog + "wait 1", args)
+            pause(SEND_GAP)
+        }
+        _uniform = false
+    }
+
+    // (row, col) → flat pixel index; -1 when out of bounds.
+    // Serpentine matrices run odd rows right-to-left.
+    function matrixIndex(row: number, col: number): number {
+        if (_rows <= 0 || _cols <= 0) return -1
+        if (row < 0 || row >= _rows || col < 0 || col >= _cols) return -1
+        const c = (_serpentine && (row % 2 == 1)) ? _cols - 1 - col : col
+        return row * _cols + c
     }
 
     // ── Pixel Control ─────────────────────────────────────────────
@@ -119,45 +172,256 @@ namespace fwdNeopixel {
         fill(0)
     }
 
+    // ── Matrix ────────────────────────────────────────────────────
+
+    /**
+     * Set the color of one pixel in the matrix.
+     * @param row the row (0 = top)
+     * @param column the column (0 = left)
+     * @param color the RGB color value
+     */
+    //% block="set matrix pixel row $row column $column to $color"
+    //% group="Matrix"
+    //% row.min=0 row.defl=0
+    //% column.min=0 column.defl=0
+    //% color.shadow="colorNumberPicker"
+    //% weight=84
+    export function setMatrixPixel(row: number, column: number, color: number): void {
+        const i = matrixIndex(row, column)
+        if (i >= 0) setPixelColor(i, color)
+    }
+
+    /**
+     * Set all pixels in a row to the same color.
+     * @param row the row index (0 = top)
+     * @param color the RGB color value
+     */
+    //% block="set row $row to $color"
+    //% group="Matrix"
+    //% row.min=0 row.defl=0
+    //% color.shadow="colorNumberPicker"
+    //% weight=83
+    export function setRow(row: number, color: number): void {
+        for (let c = 0; c < _cols; c++) setMatrixPixel(row, c, color)
+    }
+
+    /**
+     * Set all pixels in a column to the same color.
+     * @param column the column index (0 = left)
+     * @param color the RGB color value
+     */
+    //% block="set column $column to $color"
+    //% group="Matrix"
+    //% column.min=0 column.defl=0
+    //% color.shadow="colorNumberPicker"
+    //% weight=82
+    export function setColumn(column: number, color: number): void {
+        for (let r = 0; r < _rows; r++) setMatrixPixel(r, column, color)
+    }
+
+    /**
+     * Fill a rectangular area of the matrix with a color.
+     * @param row top-left row
+     * @param column top-left column
+     * @param width number of columns to fill
+     * @param height number of rows to fill
+     * @param color the RGB color value
+     */
+    //% block="fill area row $row column $column width $width height $height with $color"
+    //% group="Matrix"
+    //% row.min=0 row.defl=0
+    //% column.min=0 column.defl=0
+    //% width.min=1 width.defl=3
+    //% height.min=1 height.defl=3
+    //% color.shadow="colorNumberPicker"
+    //% weight=81
+    export function fillRect(row: number, column: number, width: number, height: number, color: number): void {
+        for (let r = row; r < row + height; r++)
+            for (let c = column; c < column + width; c++)
+                setMatrixPixel(r, c, color)
+    }
+
+    // 5-tall × 3-wide pixel font. Each row is a 3-bit mask: bit2=left, bit0=right.
+    // Index 0 = space, 1–10 = '0'–'9', 11–36 = 'A'–'Z'.
+    const FONT_DATA = [
+        0, 0, 0, 0, 0,   // space
+        7, 5, 5, 5, 7,   // 0
+        2, 6, 2, 2, 7,   // 1
+        7, 1, 7, 4, 7,   // 2
+        7, 1, 7, 1, 7,   // 3
+        5, 5, 7, 1, 1,   // 4
+        7, 4, 7, 1, 7,   // 5
+        7, 4, 7, 5, 7,   // 6
+        7, 1, 1, 1, 1,   // 7
+        7, 5, 7, 5, 7,   // 8
+        7, 5, 7, 1, 7,   // 9
+        7, 5, 7, 5, 5,   // A
+        6, 5, 6, 5, 6,   // B
+        3, 4, 4, 4, 3,   // C
+        6, 5, 5, 5, 6,   // D
+        7, 4, 7, 4, 7,   // E
+        7, 4, 7, 4, 4,   // F
+        3, 4, 5, 5, 3,   // G
+        5, 5, 7, 5, 5,   // H
+        7, 2, 2, 2, 7,   // I
+        1, 1, 1, 5, 7,   // J
+        5, 6, 4, 6, 5,   // K
+        4, 4, 4, 4, 7,   // L
+        7, 5, 5, 5, 5,   // M
+        6, 5, 5, 5, 5,   // N
+        2, 5, 5, 5, 2,   // O
+        7, 5, 7, 4, 4,   // P
+        2, 5, 5, 6, 3,   // Q
+        7, 5, 7, 6, 5,   // R
+        7, 4, 2, 1, 7,   // S
+        7, 2, 2, 2, 2,   // T
+        5, 5, 5, 5, 7,   // U
+        5, 5, 5, 5, 2,   // V
+        5, 5, 5, 7, 5,   // W
+        5, 5, 2, 5, 5,   // X
+        5, 5, 7, 2, 2,   // Y
+        7, 1, 2, 4, 7    // Z
+    ]
+
+    function fontIndex(ch: number): number {
+        if (ch == 32) return 0
+        if (ch >= 48 && ch <= 57) return ch - 47          // 0–9
+        if (ch >= 65 && ch <= 90) return ch - 54          // A–Z
+        if (ch >= 97 && ch <= 122) return ch - 86         // a–z → A–Z
+        return 0
+    }
+
+    function hueToRgb(hue: number): number {
+        hue = hue % 360
+        const hi = Math.idiv(hue, 60)
+        const f = Math.idiv((hue % 60) * 255, 60)
+        const q = 255 - f
+        if (hi == 0) return (255 << 16) | (f << 8)
+        if (hi == 1) return (q << 16) | (255 << 8)
+        if (hi == 2) return (255 << 8) | f
+        if (hi == 3) return (q << 8) | 255
+        if (hi == 4) return (f << 16) | 255
+        return (255 << 16) | q
+    }
+
+    /**
+     * Scroll text across the matrix from right to left.
+     * Set up the matrix first (at least 5 rows tall for full letters).
+     * @param text the text to display (A–Z, 0–9, space)
+     * @param color the pixel color
+     * @param speed milliseconds per scroll step
+     */
+    //% block="scroll text $text in $color||speed $speed ms"
+    //% group="Matrix"
+    //% text.defl="HELLO"
+    //% color.shadow="colorNumberPicker"
+    //% speed.min=20 speed.max=500 speed.defl=80
+    //% expandableArgumentMode="toggle"
+    //% weight=78
+    export function scrollText(text: string, color: number, speed = 80): void {
+        ensureInit()
+        if (_rows < 1 || _cols < 1) return
+        const rows = Math.min(_rows, 5)
+        const totalCols = text.length * 4    // 3 px wide + 1 spacer per char
+        const frame: number[] = []
+        for (let i = 0; i < _rows * _cols; i++) frame.push(0)
+        for (let s = 0; s < _cols + totalCols; s++) {
+            for (let i = 0; i < frame.length; i++) frame[i] = 0
+            for (let m = 0; m < _cols; m++) {
+                const cc = m - _cols + s
+                if (cc < 0 || cc >= totalCols) continue
+                const charIdx = Math.idiv(cc, 4)
+                const colInChar = cc % 4
+                if (charIdx >= text.length || colInChar >= 3) continue
+                const fi = fontIndex(text.charCodeAt(charIdx))
+                for (let r = 0; r < rows; r++) {
+                    if (((FONT_DATA[fi * 5 + r] >> (2 - colInChar)) & 1) == 1) {
+                        const idx = matrixIndex(r, m)
+                        if (idx >= 0) frame[idx] = color
+                    }
+                }
+            }
+            pushFrame(frame)
+            basic.pause(speed)
+        }
+        clear()
+    }
+
+    /**
+     * Scroll a number across the matrix from right to left.
+     * @param value the number to display
+     * @param color the pixel color
+     * @param speed milliseconds per scroll step
+     */
+    //% block="scroll number $value in $color||speed $speed ms"
+    //% group="Matrix"
+    //% value.defl=0
+    //% color.shadow="colorNumberPicker"
+    //% speed.min=20 speed.max=500 speed.defl=80
+    //% expandableArgumentMode="toggle"
+    //% weight=77
+    export function scrollNumber(value: number, color: number, speed = 80): void {
+        scrollText("" + Math.round(value), color, speed)
+    }
+
+    /**
+     * Animate a rainbow sweeping across the matrix columns.
+     * @param cycles how many full color cycles to run
+     * @param speed milliseconds between frames
+     */
+    //% block="matrix rainbow $cycles times||speed $speed ms"
+    //% group="Matrix"
+    //% cycles.min=1 cycles.max=20 cycles.defl=3
+    //% speed.min=10 speed.max=200 speed.defl=40
+    //% expandableArgumentMode="toggle"
+    //% weight=76
+    export function matrixRainbow(cycles: number, speed = 40): void {
+        ensureInit()
+        if (_rows < 1 || _cols < 1) return
+        const frame: number[] = []
+        for (let i = 0; i < _rows * _cols; i++) frame.push(0)
+        const steps = cycles * 72            // 72 steps per hue cycle (360 / 5°)
+        for (let step = 0; step < steps; step++) {
+            const offset = (step * 5) % 360
+            for (let r = 0; r < _rows; r++) {
+                for (let c = 0; c < _cols; c++) {
+                    const hue = (Math.idiv(c * 360, _cols) + offset) % 360
+                    const idx = matrixIndex(r, c)
+                    if (idx >= 0) frame[idx] = hueToRgb(hue)
+                }
+            }
+            pushFrame(frame)
+            basic.pause(speed)
+        }
+        clear()
+    }
+
     // ── Animations ────────────────────────────────────────────────
 
     /**
-     * Show a rainbow animation for a duration.
+     * Show a built-in animation for a duration. Works on strips and rings.
+     * @param animation which animation to play
      * @param duration how long to run, in milliseconds
      */
-    //% block="show rainbow for $duration ms"
+    //% block="show $animation for $duration ms"
     //% group="Animations"
     //% duration.shadow="timePicker"
     //% duration.defl=2000
     //% weight=80
-    export function showRainbow(duration: number): void {
-        strip.showAnimation(modules.ledPixelAnimations.rainbowCycle, duration)
-    }
-
-    /**
-     * Show a sparkle animation for a duration.
-     * @param duration how long to run, in milliseconds
-     */
-    //% block="show sparkle for $duration ms"
-    //% group="Animations"
-    //% duration.shadow="timePicker"
-    //% duration.defl=2000
-    //% weight=75
-    export function showSparkle(duration: number): void {
-        strip.showAnimation(modules.ledPixelAnimations.sparkle, duration)
-    }
-
-    /**
-     * Show a comet animation for a duration.
-     * @param duration how long to run, in milliseconds
-     */
-    //% block="show comet for $duration ms"
-    //% group="Animations"
-    //% duration.shadow="timePicker"
-    //% duration.defl=2000
-    //% weight=70
-    export function showComet(duration: number): void {
-        strip.showAnimation(modules.ledPixelAnimations.comet, duration)
+    export function showAnimation(animation: NeoAnimation, duration: number): void {
+        ensureInit()
+        let a: modules.ledPixelAnimations.Animation = null
+        switch (animation) {
+            case NeoAnimation.Rainbow: a = modules.ledPixelAnimations.rainbowCycle; break
+            case NeoAnimation.Comet: a = modules.ledPixelAnimations.comet; break
+            case NeoAnimation.Sparkle: a = modules.ledPixelAnimations.sparkle; break
+            case NeoAnimation.RunningLights: a = modules.ledPixelAnimations.runningLights; break
+            case NeoAnimation.ColorWipe: a = modules.ledPixelAnimations.colorWipe; break
+            case NeoAnimation.TheaterChase: a = modules.ledPixelAnimations.theatherChase; break
+            case NeoAnimation.Firefly: a = modules.ledPixelAnimations.firefly; break
+        }
+        if (a) strip.showAnimation(a, duration)
+        _uniform = false
     }
 
     // ── Configuration ─────────────────────────────────────────────
@@ -174,13 +438,12 @@ namespace fwdNeopixel {
         ensureInit()
         _brightness = Math.max(0, Math.min(100, brightness))
         // Re-apply to already-lit pixels so the change is visible immediately.
-        // Uniform strip → one fast fill; mixed pixels → per-pixel re-apply.
         if (_uniform) fill(_fillColor)
         else refresh()
     }
 
     /**
-     * Set how many pixels are on the strip.
+     * Set how many pixels are on the strip (or ring).
      * @param count the number of pixels
      */
     //% block="set pixel count to $count"
@@ -189,10 +452,48 @@ namespace fwdNeopixel {
     //% weight=55
     export function setPixelCount(count: number): void {
         ensureInit()
+        _rows = 0                         // leaving matrix mode
+        _cols = 0
         strip.setNumPixels(count)
-        // Resize the logical buffer, preserving existing colors.
         const next: number[] = []
         for (let i = 0; i < count; i++) next.push(i < _pixels.length ? _pixels[i] : 0)
+        _pixels = next
+    }
+
+    /**
+     * Set up a ring with the given number of pixels.
+     * A ring uses the same pixel and animation blocks as a strip.
+     * @param count the number of pixels on the ring
+     */
+    //% block="set up ring with $count pixels"
+    //% group="Configuration"
+    //% count.min=1 count.max=300 count.defl=24
+    //% weight=54
+    export function setupRing(count: number): void {
+        setPixelCount(count)
+    }
+
+    /**
+     * Set up a matrix of the given size. Enables the Matrix blocks.
+     * @param rows number of rows (height)
+     * @param columns number of columns (width)
+     * @param serpentine true if odd rows are wired right-to-left (zig-zag)
+     */
+    //% block="set up matrix $rows rows by $columns columns||serpentine $serpentine"
+    //% group="Configuration"
+    //% rows.min=1 rows.defl=8
+    //% columns.min=1 columns.defl=8
+    //% serpentine.shadow="toggleOnOff"
+    //% expandableArgumentMode="toggle"
+    //% weight=53
+    export function setupMatrix(rows: number, columns: number, serpentine = true): void {
+        ensureInit()
+        _rows = rows
+        _cols = columns
+        _serpentine = serpentine
+        strip.setNumPixels(rows * columns)
+        const next: number[] = []
+        for (let i = 0; i < rows * columns; i++) next.push(0)
         _pixels = next
     }
 
@@ -205,8 +506,6 @@ namespace fwdNeopixel {
      *   - 1A supply  -> 1000 mA
      *   - 2A supply  -> 2000 mA
      *   - 5A supply  -> 5000 mA
-     *
-     * Each WS2812B pixel draws up to ~60 mA at full white.
      *
      * @param milliamps current budget in milliamps
      */

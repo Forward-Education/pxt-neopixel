@@ -11,7 +11,7 @@ the module's screw terminal.
 In MakeCode for micro:bit (V2):
 1. Open **Extensions** in the toolbox
 2. Paste `https://github.com/Forward-Education/pxt-neopixel`
-3. The **Fwd Neopixel** category appears in the toolbox
+3. The **Neopixel** category appears in the toolbox
 
 ### Connect the hardware
 
@@ -28,14 +28,25 @@ In MakeCode for micro:bit (V2):
 - `set all pixels to [color]` — fill the strip (applies immediately)
 - `clear all pixels` — turn off all pixels
 
-**Animations** (each runs for a duration in milliseconds)
-- `show rainbow for [n] ms`
-- `show sparkle for [n] ms`
-- `show comet for [n] ms`
+**Animations**
+- `show [animation] for [n] ms` — one block, animation chosen from a dropdown:
+  rainbow, comet, sparkle, running lights, color wipe, theater chase, firefly.
+  Works on strips and rings.
+
+**Matrix** (call `set up matrix` first)
+- `set matrix pixel row [r] column [c] to [color]`
+- `set row [r] to [color]` / `set column [c] to [color]`
+- `fill area row [r] column [c] width [w] height [h] with [color]`
+- `scroll text [text] in [color]` — scrolls A–Z, 0–9, space (5-tall font)
+- `scroll number [n] in [color]`
+- `matrix rainbow [cycles] times` — rainbow sweep across the columns
 
 **Configuration**
 - `set brightness to [n] %` — global brightness (0–100)
-- `set pixel count to [n]` — number of pixels on the strip
+- `set pixel count to [n]` — number of pixels on a strip
+- `set up ring with [n] pixels` — a ring uses the same pixel/animation blocks
+- `set up matrix [rows] by [columns]` — enables the Matrix blocks (optional
+  `serpentine` for zig-zag wiring)
 - `set max power to [n] mA` — current budget for auto-dimming (see Power below)
 
 > Note: pixel and animation commands apply immediately — there is no separate
@@ -65,7 +76,7 @@ fwdNeopixel.setPixelCount(10)
 fwdNeopixel.setMaxPower(450)
 fwdNeopixel.setBrightness(30)
 basic.forever(function () {
-    fwdNeopixel.showRainbow(2000)
+    fwdNeopixel.showAnimation(NeoAnimation.Rainbow, 2000)
 })
 ```
 
@@ -86,7 +97,7 @@ fwdNeopixel.setPixelCount(60)
 fwdNeopixel.setMaxPower(2000)
 fwdNeopixel.setBrightness(80)
 basic.forever(function () {
-    fwdNeopixel.showRainbow(2000)
+    fwdNeopixel.showAnimation(NeoAnimation.Rainbow, 2000)
 })
 ```
 
