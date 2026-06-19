@@ -46,17 +46,30 @@ namespace fwdNeopixel {
     let _rows = 0
     let _cols = 0
     let _serpentine = true
+    let _dirty = false                   // matrix buffer changed, needs a flush
 
     const SEND_GAP = 6                   // ms between sends
 
     // Start the client and wait for the module to connect before the first
-    // command — commands sent during bus enumeration are dropped.
+    // command — commands sent during bus enumeration are dropped. Also start a
+    // background flusher that pushes the matrix buffer as a single batched frame
+    // shortly after any draw, so a loop of draws shows "all at once" (fast) and
+    // reliably, instead of one slow packet per pixel.
     function ensureInit(): void {
         if (_initialized) return
         _initialized = true
         strip.setBrightness(100)         // firmware at full; we scale in software
         pauseUntil(() => strip.isConnected(), 3000)
         pause(50)
+        control.runInParallel(() => {
+            for (;;) {
+                if (_dirty) {
+                    _dirty = false
+                    pushFrame(_pixels, true)
+                }
+                pause(15)
+            }
+        })
     }
 
     // Scale an RGB color by the current software brightness.
@@ -92,10 +105,22 @@ namespace fwdNeopixel {
         send("setall # wait 1", [dim(color)])
     }
 
-    // Push a full frame of raw RGB colors. Many `setone` per packet (kept under
-    // the Jacdac packet size), sent once per frame — animation frames refresh
-    // continuously, so a dropped frame self-heals on the next one.
-    function pushFrame(frame: number[]): void {
+    // Send one chunk (a multi-`setone` program). `reliable` sends it twice to
+    // cover a dropped packet (used for static draws; animation frames self-heal
+    // on the next frame, so they send once).
+    function sendChunk(prog: string, args: number[], reliable: boolean): void {
+        strip.runEncoded(prog, args.slice())
+        pause(SEND_GAP)
+        if (reliable) {
+            strip.runEncoded(prog, args.slice())
+            pause(SEND_GAP)
+        }
+    }
+
+    // Push a full frame of raw RGB colors as chunked multi-`setone` programs
+    // (kept under the Jacdac packet size) — the whole frame in a handful of
+    // packets instead of one per pixel.
+    function pushFrame(frame: number[], reliable = false): void {
         let prog = ""
         let args: number[] = []
         let n = 0
@@ -105,17 +130,13 @@ namespace fwdNeopixel {
             args.push(dim(frame[i]))
             n++
             if (n >= 25) {               // flush a chunk (~150 bytes)
-                strip.runEncoded(prog + "wait 1", args)
-                pause(SEND_GAP)
+                sendChunk(prog + "wait 1", args, reliable)
                 prog = ""
                 args = []
                 n = 0
             }
         }
-        if (n > 0) {
-            strip.runEncoded(prog + "wait 1", args)
-            pause(SEND_GAP)
-        }
+        if (n > 0) sendChunk(prog + "wait 1", args, reliable)
         _uniform = false
     }
 
@@ -187,8 +208,13 @@ namespace fwdNeopixel {
     //% color.shadow="colorNumberPicker"
     //% weight=84
     export function setMatrixPixel(row: number, column: number, color: number): void {
+        ensureInit()
         const i = matrixIndex(row, column)
-        if (i >= 0) setPixelColor(i, color)
+        if (i >= 0) {
+            _pixels[i] = color
+            _uniform = false
+            _dirty = true                // shown by the background flusher
+        }
     }
 
     /**
@@ -321,6 +347,7 @@ namespace fwdNeopixel {
     export function scrollText(text: string, color: number, speed = 80): void {
         ensureInit()
         if (_rows < 1 || _cols < 1) return
+        _dirty = false                   // we drive frames directly here
         // Integer-scale the 3x5 font to fit the matrix height, and center it.
         const sc = Math.max(1, Math.idiv(_rows, 5))        // 5-tall -> 1x, 10 -> 2x …
         const rowOff = Math.max(0, Math.idiv(_rows - 5 * sc, 2))
@@ -384,6 +411,7 @@ namespace fwdNeopixel {
     export function matrixRainbow(cycles: number, speed = 40): void {
         ensureInit()
         if (_rows < 1 || _cols < 1) return
+        _dirty = false                   // we drive frames directly here
         const frame: number[] = []
         for (let i = 0; i < _rows * _cols; i++) frame.push(0)
         const steps = cycles * 72            // 72 steps per hue cycle (360 / 5°)
@@ -444,8 +472,9 @@ namespace fwdNeopixel {
         ensureInit()
         _brightness = Math.max(0, Math.min(100, brightness))
         // Re-apply to already-lit pixels so the change is visible immediately.
-        if (_uniform) fill(_fillColor)
-        else refresh()
+        if (_uniform) fill(_fillColor)        // strip/ring filled with one color
+        else if (_rows > 0) _dirty = true     // matrix: re-push buffer via flusher
+        else refresh()                        // strip with individually-set pixels
     }
 
     /**
