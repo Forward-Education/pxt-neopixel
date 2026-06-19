@@ -61,6 +61,7 @@ namespace fwdNeopixel {
     let _cols = 0
     let _layout = MatrixLayout.Progressive
     let _dirty = false                   // matrix buffer changed, needs a flush
+    let _maxPixels = 0                    // firmware RAM cap (0 = unknown)
 
     const SEND_GAP = 6                   // ms between sends
 
@@ -75,6 +76,7 @@ namespace fwdNeopixel {
         strip.setBrightness(100)         // firmware at full; we scale in software
         pauseUntil(() => strip.isConnected(), 3000)
         pause(50)
+        _maxPixels = strip.maxPixels()   // module's RAM-limited pixel ceiling
         control.runInParallel(() => {
             for (;;) {
                 if (_dirty) {
@@ -106,7 +108,8 @@ namespace fwdNeopixel {
 
     // Re-send every stored pixel at the current brightness (mixed colors).
     function refresh(): void {
-        for (let i = 0; i < _pixels.length; i++) {
+        const lim = _maxPixels > 0 ? Math.min(_pixels.length, _maxPixels) : _pixels.length
+        for (let i = 0; i < lim; i++) {
             send("setone % # wait 1", [i, dim(_pixels[i])])
         }
     }
@@ -135,10 +138,11 @@ namespace fwdNeopixel {
     // (kept under the Jacdac packet size) — the whole frame in a handful of
     // packets instead of one per pixel.
     function pushFrame(frame: number[], reliable = false): void {
+        const lim = _maxPixels > 0 ? Math.min(frame.length, _maxPixels) : frame.length
         let prog = ""
         let args: number[] = []
         let n = 0
-        for (let i = 0; i < frame.length; i++) {
+        for (let i = 0; i < lim; i++) {
             prog += "setone % # "
             args.push(i)
             args.push(dim(frame[i]))
@@ -551,6 +555,19 @@ namespace fwdNeopixel {
         const next: number[] = []
         for (let i = 0; i < rows * columns; i++) next.push(0)
         _pixels = next
+    }
+
+    /**
+     * The maximum number of pixels this module can drive. This is limited by
+     * the module's RAM (about 75 on the standard board), not by current — the
+     * firmware ignores any pixels above this. Use it to size strips/matrices.
+     */
+    //% block="max pixels supported"
+    //% group="Configuration"
+    //% weight=45
+    export function maxPixels(): number {
+        ensureInit()
+        return _maxPixels
     }
 
     /**

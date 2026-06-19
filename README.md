@@ -162,6 +162,20 @@ Build with `make TARGET=fwd-neopixel`.
 The firmware default for `max_power` is **450 mA** (bus-safe). It is a
 writable register, so programs can raise it when an external supply is used.
 
+### Maximum pixels (RAM limit)
+
+The module's STM32G030F6 has only **8 KB of RAM**. The firmware gives whatever
+is left after Jacdac to the pixel buffer at 3 bytes/pixel, which works out to
+**about 75 pixels**. Writes to `num_pixels` above that are clamped — the extra
+pixels simply never light. This is a **RAM limit, not a current limit**, so it
+can't be raised in software.
+
+Practical consequences:
+- Strips/rings: keep to ~75 pixels.
+- Matrices: an **8×8 (64)** fits; a **16×16 (256)** does **not** — it needs a
+  controller with more RAM.
+- Use the `max pixels supported` block to read your unit's exact ceiling.
+
 ## API notes
 
 This extension wraps `modules.LedStripClient` from
