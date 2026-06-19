@@ -46,8 +46,11 @@ In MakeCode for micro:bit (V2):
 - `set brightness to [n] %` — global brightness (0–100)
 - `set pixel count to [n]` — number of pixels on a strip
 - `set up ring with [n] pixels` — a ring uses the same pixel/animation blocks
-- `set up matrix [rows] by [columns]` — enables the Matrix blocks (optional
-  `serpentine` for zig-zag wiring)
+- `set up matrix [rows] by [columns] wired by [layout]` — enables the Matrix
+  blocks. Pick the layout matching your panel's wiring: **rows, left to right**
+  (progressive), **rows, zig-zag** (serpentine), **columns, top to bottom**, or
+  **columns, zig-zag**. To find yours, light `set matrix pixel row 0 column 1`
+  and `row 1 column 0` and see where they land.
 - `set max power to [n] mA` — current budget for auto-dimming (see Power below)
 
 > Note: pixel and animation commands apply immediately — there is no separate

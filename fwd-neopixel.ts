@@ -30,6 +30,20 @@ enum NeoAnimation {
     Firefly
 }
 
+/**
+ * How a matrix's LEDs are wired (the order pixels 0,1,2… run through it).
+ */
+enum MatrixLayout {
+    //% block="rows, left to right"
+    Progressive,
+    //% block="rows, zig-zag"
+    Serpentine,
+    //% block="columns, top to bottom"
+    Columns,
+    //% block="columns, zig-zag"
+    ColumnsSerpentine
+}
+
 //% color="#FF6600" icon="" weight=90 block="Neopixel"
 //% groups="['Pixels', 'Matrix', 'Animations', 'Configuration']"
 namespace fwdNeopixel {
@@ -45,7 +59,7 @@ namespace fwdNeopixel {
     // Matrix layout (0 = not configured as a matrix)
     let _rows = 0
     let _cols = 0
-    let _serpentine = true
+    let _layout = MatrixLayout.Progressive
     let _dirty = false                   // matrix buffer changed, needs a flush
 
     const SEND_GAP = 6                   // ms between sends
@@ -140,13 +154,19 @@ namespace fwdNeopixel {
         _uniform = false
     }
 
-    // (row, col) → flat pixel index; -1 when out of bounds.
-    // Serpentine matrices run odd rows right-to-left.
+    // (row, col) → flat pixel index for the configured wiring; -1 if off-grid.
     function matrixIndex(row: number, col: number): number {
         if (_rows <= 0 || _cols <= 0) return -1
         if (row < 0 || row >= _rows || col < 0 || col >= _cols) return -1
-        const c = (_serpentine && (row % 2 == 1)) ? _cols - 1 - col : col
-        return row * _cols + c
+        if (_layout == MatrixLayout.Progressive) return row * _cols + col
+        if (_layout == MatrixLayout.Serpentine) {
+            const c = (row % 2 == 1) ? _cols - 1 - col : col   // odd rows reversed
+            return row * _cols + c
+        }
+        if (_layout == MatrixLayout.Columns) return col * _rows + row
+        // ColumnsSerpentine: odd columns run bottom-to-top
+        const r = (col % 2 == 1) ? _rows - 1 - row : row
+        return col * _rows + r
     }
 
     // ── Pixel Control ─────────────────────────────────────────────
@@ -510,22 +530,23 @@ namespace fwdNeopixel {
 
     /**
      * Set up a matrix of the given size. Enables the Matrix blocks.
+     * Pick the layout that matches how your panel is wired (see the Matrix
+     * section of the README, or test with `set matrix pixel`).
      * @param rows number of rows (height)
      * @param columns number of columns (width)
-     * @param serpentine true if odd rows are wired right-to-left (zig-zag)
+     * @param layout how the LEDs are wired through the panel
      */
-    //% block="set up matrix $rows rows by $columns columns||serpentine $serpentine"
+    //% block="set up matrix $rows rows by $columns columns wired by $layout"
     //% group="Configuration"
     //% rows.min=1 rows.defl=8
     //% columns.min=1 columns.defl=8
-    //% serpentine.shadow="toggleOnOff"
-    //% expandableArgumentMode="toggle"
+    //% layout.defl=MatrixLayout.Progressive
     //% weight=53
-    export function setupMatrix(rows: number, columns: number, serpentine = true): void {
+    export function setupMatrix(rows: number, columns: number, layout: MatrixLayout = MatrixLayout.Progressive): void {
         ensureInit()
         _rows = rows
         _cols = columns
-        _serpentine = serpentine
+        _layout = layout
         strip.setNumPixels(rows * columns)
         const next: number[] = []
         for (let i = 0; i < rows * columns; i++) next.push(0)
