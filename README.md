@@ -111,70 +111,47 @@ GND terminal so the data signal has a return path.
 ## Hardware
 
 The module uses a Forward Education Jacdac PCB with:
-- STM32G030F6Px MCU running Jacdac LED Strip firmware
-- SN74LVC1T45 level shifter (3.3V → 5V) on the data line
+- **STM32C031F6P6** MCU (12 KB RAM) running Jacdac LED Strip firmware — a
+  pin-compatible upgrade from the original **STM32G030F6** (8 KB); the same PCB
+  takes either part
+- SN74LVC1T45 level shifter (3.3V → 5V) on the data line (PA12)
 - 3-pin 3.5mm-pitch screw terminal (VCC, DIN, GND)
 
 ### Firmware
 
 The module firmware lives in the `fwd-neopixel` target of the
-[firmware](https://github.com/Forward-Education/firmware) repository.
+[firmware](https://github.com/Forward-Education/firmware) repository, which
+defaults to the **STM32C031** build (the STM32G030 config is kept alongside for
+A/B). See that target's README for the full port and hardware notes. Points
+relevant to this extension:
 
-**Required firmware change:** the Jacdac STM32 platform code needs a one-line
-addition to `jacdac-stm32x0/stm32/spidef.h` (line 44) to support PA12 as an
-SPI1 MOSI pin:
+- **Data output** is on **PA12** → level shifter → strip DIN.
+- **Clearing / black works:** earlier firmware skipped transmitting an all-black
+  frame (a power-save path that cut a strip power pin this board doesn't have),
+  so `clear` / set-to-black appeared to do nothing. Fixed with `PIN_PWR -1` in
+  `targets/fwd-neopixel/board.h` plus an `#if PIN_PWR >= 0` guard around the skip
+  in `jacdac-c/services/ledstrip.c`.
+- Build with `make TARGET=fwd-neopixel`.
 
-```c
-// Before:
-STATIC_ASSERT(PIN_AMOSI == PA_7 || PIN_AMOSI == PA_2);
+`max_power` is a writable register, so programs can raise it with `set max
+power` when an external supply is used (the default is a bus-safe value).
 
-// After:
-STATIC_ASSERT(PIN_AMOSI == PA_7 || PIN_AMOSI == PA_2 || PIN_AMOSI == PA_12);
-```
+### Maximum pixels
 
-**Required firmware change (clearing / black):** the LED-strip service skips
-transmitting an all-black frame and instead cuts the strip power pin — intended
-to save power when everything is off. This module has no such power switch, so
-the all-black frame is never sent and the pixels stay latched on their last
-color (clear / set-to-black appears to do nothing). Two coordinated changes fix
-it:
+How many pixels the module can drive is limited by its MCU RAM (the pixel buffer
+needs 3 bytes/pixel), and the firmware caps `max_pixels` for stack safety —
+**not** by current. On the current **STM32C031 (12 KB RAM)** build the cap is
+**512 pixels**, so a **16×16 (256)** matrix is fully supported. The original
+**STM32G030 (8 KB)** modules were limited to **~75 pixels**.
 
-1. `targets/fwd-neopixel/board.h`: set `#define PIN_PWR -1` (no power pin).
-2. `jacdac-c/services/ledstrip.c`: guard the all-black skip so it only runs
-   when there is a real power pin:
-
-```c
-#if PIN_PWR >= 0
-    if (is_empty((uint32_t *)state->pxbuffer, PX_WORDS(state->numpixels))) {
-        jd_power_enable(0);
-        return;
-    } else {
-        jd_power_enable(1);
-    }
-#endif
-```
-
-(Newer upstream `jacdac-c` already has this `#if PIN_PWR >= 0` guard; older
-vendored copies run the skip unconditionally.)
-
-Build with `make TARGET=fwd-neopixel`.
-
-The firmware default for `max_power` is **450 mA** (bus-safe). It is a
-writable register, so programs can raise it when an external supply is used.
-
-### Maximum pixels (RAM limit)
-
-The module's STM32G030F6 has only **8 KB of RAM**. The firmware gives whatever
-is left after Jacdac to the pixel buffer at 3 bytes/pixel, which works out to
-**about 75 pixels**. Writes to `num_pixels` above that are clamped — the extra
-pixels simply never light. This is a **RAM limit, not a current limit**, so it
-can't be raised in software.
-
-Practical consequences:
-- Strips/rings: keep to ~75 pixels.
-- Matrices: an **8×8 (64)** fits; a **16×16 (256)** does **not** — it needs a
-  controller with more RAM.
-- Use the `max pixels supported` block to read your unit's exact ceiling.
+- Use the **`max pixels supported`** block to read your unit's exact ceiling
+  (`basic.show number` + the block). If it reports ~75, that unit is running the
+  8 KB G030 firmware; the C031 build reports far more.
+- `set pixel count` above the ceiling is clamped — extra pixels won't light. The
+  extension reads `max_pixels` at startup and never sends beyond it.
+- This is a **RAM limit, not a current limit.** Even within the pixel budget, a
+  large or bright display still needs adequate power — see **Power** above
+  (external 5 V + a higher `set max power` for a full, bright 16×16).
 
 ## API notes
 

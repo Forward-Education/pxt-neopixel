@@ -17,7 +17,7 @@ fwdNeopixel.clear()
 fwdNeopixel.showAnimation(NeoAnimation.Rainbow, 2000)
 
 // ── Matrix ────────────────────────────────────────────────────
-fwdNeopixel.setupMatrix(8, 8)
+fwdNeopixel.setupMatrix(8, 8, MatrixLayout.Progressive)
 fwdNeopixel.setMatrixPixel(0, 0, 0xFF0000)
 fwdNeopixel.fillRect(2, 2, 3, 3, 0x0000FF)
 basic.pause(1500)

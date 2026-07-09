@@ -546,7 +546,7 @@ namespace fwdNeopixel {
     //% columns.min=1 columns.defl=8
     //% layout.defl=MatrixLayout.Progressive
     //% weight=53
-    export function setupMatrix(rows: number, columns: number, layout: MatrixLayout = MatrixLayout.Progressive): void {
+    export function setupMatrix(rows: number, columns: number, layout: MatrixLayout): void {
         ensureInit()
         _rows = rows
         _cols = columns
