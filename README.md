@@ -33,7 +33,7 @@ In MakeCode for micro:bit (V2):
   rainbow, comet, sparkle, running lights, color wipe, theater chase, firefly.
   Works on strips and rings.
 
-**Matrix** (call `set up matrix` first)
+**Matrix** (call `set up matrix` or `set up circular matrix` first)
 - `set matrix pixel row [r] column [c] to [color]`
 - `set row [r] to [color]` / `set column [c] to [color]`
 - `fill area row [r] column [c] width [w] height [h] with [color]`
@@ -46,6 +46,9 @@ In MakeCode for micro:bit (V2):
 - `set brightness to [n] %` — global brightness (0–100)
 - `set pixel count to [n]` — number of pixels on a strip
 - `set up ring with [n] pixels` — a ring uses the same pixel/animation blocks
+- `set up circular matrix` — the round 256-LED panel. Address it like an 18×18
+  grid (row/column 0–17) with the Matrix blocks; the rounded corners have no LED
+  and are ignored. Needs the STM32C031 module (256 px > the 8 KB G030's ~75).
 - `set up matrix [rows] by [columns] wired by [layout]` — enables the Matrix
   blocks. Pick the layout matching your panel's wiring: **rows, left to right**
   (progressive), **rows, zig-zag** (serpentine), **columns, top to bottom**, or

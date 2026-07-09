@@ -63,6 +63,12 @@ namespace fwdNeopixel {
     let _dirty = false                   // matrix buffer changed, needs a flush
     let _maxPixels = 0                    // firmware RAM cap (0 = unknown)
 
+    // Circular matrix: LEDs per row, top→bottom, centered, snaking (serpentine),
+    // pixel 0 at the top-left. Sums to 256 (an ~18-diameter round panel).
+    let _circle = false
+    let _circleStart: number[] = []      // strip index where each row begins
+    const CIRCLE_ROWS = [6, 10, 12, 14, 16, 16, 18, 18, 18, 18, 18, 18, 16, 16, 14, 12, 10, 6]
+
     const SEND_GAP = 6                   // ms between sends
 
     // Start the client and wait for the module to connect before the first
@@ -162,6 +168,15 @@ namespace fwdNeopixel {
     function matrixIndex(row: number, col: number): number {
         if (_rows <= 0 || _cols <= 0) return -1
         if (row < 0 || row >= _rows || col < 0 || col >= _cols) return -1
+        if (_circle) {
+            // Each row is centered in the bounding grid and holds CIRCLE_ROWS[row]
+            // LEDs; positions outside that span (the rounded corners) have no LED.
+            const w = CIRCLE_ROWS[row]
+            const p0 = col - ((_cols - w) >> 1)          // 0-based position in the row
+            if (p0 < 0 || p0 >= w) return -1             // outside the circle here
+            const p = (row % 2 == 1) ? (w - 1 - p0) : p0 // snake: odd rows reversed
+            return _circleStart[row] + p
+        }
         if (_layout == MatrixLayout.Progressive) return row * _cols + col
         if (_layout == MatrixLayout.Serpentine) {
             const c = (row % 2 == 1) ? _cols - 1 - col : col   // odd rows reversed
@@ -511,6 +526,7 @@ namespace fwdNeopixel {
     //% weight=55
     export function setPixelCount(count: number): void {
         ensureInit()
+        _circle = false
         _rows = 0                         // leaving matrix mode
         _cols = 0
         strip.setNumPixels(count)
@@ -548,6 +564,7 @@ namespace fwdNeopixel {
     //% weight=53
     export function setupMatrix(rows: number, columns: number, layout: MatrixLayout): void {
         ensureInit()
+        _circle = false
         _rows = rows
         _cols = columns
         _layout = layout
@@ -555,6 +572,31 @@ namespace fwdNeopixel {
         const next: number[] = []
         for (let i = 0; i < rows * columns; i++) next.push(0)
         _pixels = next
+    }
+
+    /**
+     * Set up the round (circular) 256-LED panel. Address it like a normal grid
+     * with the Matrix blocks (row 0–17, column 0–17); positions in the rounded
+     * corners simply have no LED and are ignored.
+     */
+    //% block="set up circular matrix"
+    //% group="Configuration"
+    //% weight=52
+    export function setupCircleMatrix(): void {
+        ensureInit()
+        _circle = true
+        _rows = CIRCLE_ROWS.length            // 18 rows
+        _cols = 0                             // widest row = bounding-box width
+        _circleStart = []
+        let total = 0
+        for (let i = 0; i < CIRCLE_ROWS.length; i++) {
+            _circleStart.push(total)
+            total += CIRCLE_ROWS[i]
+            if (CIRCLE_ROWS[i] > _cols) _cols = CIRCLE_ROWS[i]
+        }
+        strip.setNumPixels(total)             // 256
+        _pixels = []
+        for (let i = 0; i < total; i++) _pixels.push(0)
     }
 
     /**

@@ -24,3 +24,11 @@ basic.pause(1500)
 fwdNeopixel.scrollText("HI", 0x00FF00, 80)
 fwdNeopixel.scrollNumber(42, 0xFF00FF, 80)
 fwdNeopixel.matrixRainbow(2, 40)
+
+// ── Circular matrix (round 256-LED panel, STM32C031) ──────────
+fwdNeopixel.setupCircleMatrix()
+fwdNeopixel.setAllPixels(0x001000)          // whole disc dim green
+fwdNeopixel.setMatrixPixel(0, 8, 0xFF0000)  // top-center red
+fwdNeopixel.fillRect(6, 6, 6, 6, 0x0000FF)  // blue block through the middle
+basic.pause(1500)
+fwdNeopixel.scrollText("HI", 0xFFFFFF, 80)
